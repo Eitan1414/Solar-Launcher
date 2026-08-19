@@ -118,7 +118,7 @@ Advanced addon support will require game-specific Solar APIs/adapters, because e
 
 ---
 
-📂 Planned SD Structure
+## 📂 Planned SD Structure
 
 SD:/wiiu/SolarLauncher/
 │
@@ -217,7 +217,7 @@ Solar therefore plans to support optional game-specific APIs/adapters.
 
 For example:
 
-☀ Solar Launcher
+## ☀ Solar Launcher
 │
 ├── Solar Cuphead API
 ├── Solar Mario Kart 8 API
@@ -242,7 +242,7 @@ The exact available functionality would depend on each supported game.
 
 A future Cuphead addon could theoretically look like:
 
-FanmadeIsland/
+## FanmadeIsland/
 │
 ├── addon.json
 │
@@ -319,7 +319,7 @@ v0.6+
 
 Solar Launcher is planned around several main systems:
 
-☀ Solar Launcher
+## ☀ Solar Launcher
 │
 ├── Title Manager
 │   └── Detects the currently launched game

@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <utility>
 
 namespace Solar {
 namespace {

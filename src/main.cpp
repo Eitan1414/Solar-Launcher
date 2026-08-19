@@ -73,6 +73,11 @@ ON_APPLICATION_START() {
     const uint64_t titleId = Solar::TitleManager::CurrentTitleId();
     const std::string titleIdText = Solar::TitleManager::FormatTitleId(titleId);
 
+    if (!Solar::TitleManager::IsGameTitle(titleId)) {
+        Solar::Logger::Info("Ignoring non-game title %s", titleIdText.c_str());
+        return;
+    }
+
     if (!gEnabled) {
         Solar::Logger::Info("Solar disabled; title %s will start normally", titleIdText.c_str());
         return;

@@ -1,7 +1,10 @@
+#include "solar/ConflictDetector.hpp"
 #include "solar/Logger.hpp"
 #include "solar/ModManager.hpp"
+#include "solar/ModMenu.hpp"
 #include "solar/Paths.hpp"
 #include "solar/RedirectEngine.hpp"
+#include "solar/SelectionStore.hpp"
 #include "solar/TitleManager.hpp"
 
 #include <wups.h>
@@ -10,7 +13,7 @@
 
 WUPS_PLUGIN_NAME("Solar Launcher");
 WUPS_PLUGIN_DESCRIPTION("Universal Wii U modding framework for Aroma.");
-WUPS_PLUGIN_VERSION("v0.2.0-dev");
+WUPS_PLUGIN_VERSION("v0.3.0-dev");
 WUPS_PLUGIN_AUTHOR("Eitan1414");
 WUPS_PLUGIN_LICENSE("Unlicensed");
 
@@ -22,34 +25,42 @@ namespace {
 constexpr const char *EnabledConfigId = "enabled";
 constexpr const char *FileModsConfigId = "file_mods_enabled";
 constexpr const char *LegacySDCafiineConfigId = "legacy_sdcafiine_enabled";
+constexpr const char *PreLaunchMenuConfigId = "prelaunch_menu_enabled";
 
 constexpr bool DefaultEnabled = true;
 constexpr bool DefaultFileModsEnabled = true;
 constexpr bool DefaultLegacySDCafiineEnabled = true;
+constexpr bool DefaultPreLaunchMenuEnabled = true;
 
 bool gEnabled = DefaultEnabled;
 bool gFileModsEnabled = DefaultFileModsEnabled;
 bool gLegacySDCafiineEnabled = DefaultLegacySDCafiineEnabled;
+bool gPreLaunchMenuEnabled = DefaultPreLaunchMenuEnabled;
+
+void StoreBool(const char *key, bool value) {
+    if (WUPSStorageAPI_StoreBool(nullptr, key, value) != WUPS_STORAGE_ERROR_SUCCESS) {
+        Solar::Logger::Error("Failed to store setting %s", key);
+    }
+}
 
 void EnabledChanged(ConfigItemBoolean *, bool newValue) {
     gEnabled = newValue;
-    if (WUPSStorageAPI_StoreBool(nullptr, EnabledConfigId, gEnabled) != WUPS_STORAGE_ERROR_SUCCESS) {
-        Solar::Logger::Error("Failed to store enabled setting");
-    }
+    StoreBool(EnabledConfigId, gEnabled);
 }
 
 void FileModsChanged(ConfigItemBoolean *, bool newValue) {
     gFileModsEnabled = newValue;
-    if (WUPSStorageAPI_StoreBool(nullptr, FileModsConfigId, gFileModsEnabled) != WUPS_STORAGE_ERROR_SUCCESS) {
-        Solar::Logger::Error("Failed to store file mods setting");
-    }
+    StoreBool(FileModsConfigId, gFileModsEnabled);
 }
 
 void LegacySDCafiineChanged(ConfigItemBoolean *, bool newValue) {
     gLegacySDCafiineEnabled = newValue;
-    if (WUPSStorageAPI_StoreBool(nullptr, LegacySDCafiineConfigId, gLegacySDCafiineEnabled) != WUPS_STORAGE_ERROR_SUCCESS) {
-        Solar::Logger::Error("Failed to store SDCafiine compatibility setting");
-    }
+    StoreBool(LegacySDCafiineConfigId, gLegacySDCafiineEnabled);
+}
+
+void PreLaunchMenuChanged(ConfigItemBoolean *, bool newValue) {
+    gPreLaunchMenuEnabled = newValue;
+    StoreBool(PreLaunchMenuConfigId, gPreLaunchMenuEnabled);
 }
 
 WUPSConfigAPICallbackStatus ConfigMenuOpenedCallback(WUPSConfigCategoryHandle root) {
@@ -68,6 +79,12 @@ WUPSConfigAPICallbackStatus ConfigMenuOpenedCallback(WUPSConfigCategoryHandle ro
     if (WUPSConfigItemBoolean_AddToCategory(root, LegacySDCafiineConfigId, "Detect SDCafiine packs",
                                             DefaultLegacySDCafiineEnabled, gLegacySDCafiineEnabled,
                                             &LegacySDCafiineChanged) != WUPSCONFIG_API_RESULT_SUCCESS) {
+        return WUPSCONFIG_API_CALLBACK_RESULT_ERROR;
+    }
+
+    if (WUPSConfigItemBoolean_AddToCategory(root, PreLaunchMenuConfigId, "Show pre-launch mod menu",
+                                            DefaultPreLaunchMenuEnabled, gPreLaunchMenuEnabled,
+                                            &PreLaunchMenuChanged) != WUPSCONFIG_API_RESULT_SUCCESS) {
         return WUPSCONFIG_API_CALLBACK_RESULT_ERROR;
     }
 
@@ -101,15 +118,16 @@ INITIALIZE_PLUGIN() {
     LoadBoolSetting(EnabledConfigId, DefaultEnabled, gEnabled);
     LoadBoolSetting(FileModsConfigId, DefaultFileModsEnabled, gFileModsEnabled);
     LoadBoolSetting(LegacySDCafiineConfigId, DefaultLegacySDCafiineEnabled, gLegacySDCafiineEnabled);
+    LoadBoolSetting(PreLaunchMenuConfigId, DefaultPreLaunchMenuEnabled, gPreLaunchMenuEnabled);
     WUPSStorageAPI_SaveStorage(false);
 
     Solar::RedirectEngine::Initialize();
-    Solar::Logger::Info("Solar Launcher v0.2 core initialized");
+    Solar::Logger::Info("Solar Launcher v0.3 initialized");
 }
 
 DEINITIALIZE_PLUGIN() {
     Solar::RedirectEngine::Shutdown();
-    Solar::Logger::Info("Solar Launcher v0.2 core deinitialized");
+    Solar::Logger::Info("Solar Launcher v0.3 deinitialized");
 }
 
 ON_APPLICATION_START() {
@@ -138,21 +156,34 @@ ON_APPLICATION_START() {
         return;
     }
 
-    const auto mods = Solar::ModManager::ScanForTitle(titleId, gLegacySDCafiineEnabled);
+    auto mods = Solar::ModManager::ScanForTitle(titleId, gLegacySDCafiineEnabled);
+    Solar::SelectionStore::Load(titleId, mods);
+
     Solar::Logger::Info("Detected title %s with %u compatible mod(s)",
                         titleIdText.c_str(), static_cast<unsigned int>(mods.size()));
-
-    for (const auto &mod : mods) {
-        Solar::Logger::Info("Found mod: %s | author=%s | version=%s | type=%s | enabled=%s | priority=%d | content=%s | aoc=%s%s",
-                            mod.name.c_str(), mod.author.c_str(), mod.version.c_str(), mod.type.c_str(),
-                            mod.enabled ? "yes" : "no", mod.priority,
-                            mod.hasContent ? "yes" : "no", mod.hasAoc ? "yes" : "no",
-                            mod.legacySDCafiine ? " | source=SDCafiine" : "");
-    }
 
     if (!gFileModsEnabled) {
         Solar::Logger::Info("File replacement mods are disabled; launching without redirection");
         return;
+    }
+
+    if (gPreLaunchMenuEnabled && !mods.empty()) {
+        const Solar::MenuResult menu = Solar::ModMenu::Show(titleId, mods);
+        if (menu.action == Solar::MenuAction::LaunchVanilla) {
+            Solar::Logger::Info("User selected vanilla launch");
+            return;
+        }
+
+        if (menu.action == Solar::MenuAction::Failed) {
+            Solar::Logger::Warn("Pre-launch menu failed; continuing with saved/default selections");
+        }
+    }
+
+    const Solar::ConflictReport conflicts = Solar::ConflictDetector::Analyze(mods);
+    if (conflicts.conflictingPaths > 0) {
+        Solar::Logger::Warn("Launching with %u conflicting replacement path(s)%s",
+                            static_cast<unsigned int>(conflicts.conflictingPaths),
+                            conflicts.truncated ? " (scan truncated)" : "");
     }
 
     if (!Solar::RedirectEngine::IsAvailable()) {

@@ -172,6 +172,8 @@ ModInfo ParseManifest(const std::string &directoryName, const std::string &direc
     mod.declaredTitleId = ExtractJsonString(manifest, "titleId");
     mod.enabled = ExtractJsonBool(manifest, "enabled", true);
     mod.priority = ExtractJsonInt(manifest, "priority", 0);
+    mod.defaultEnabled = mod.enabled;
+    mod.defaultPriority = mod.priority;
 
     if (mod.name.empty()) {
         mod.name = directoryName;
@@ -284,11 +286,13 @@ void ScanLegacySDCafiineMods(uint64_t titleId, std::vector<ModInfo> &mods) {
         legacyMods[0].enabled = true;
         Logger::Info("Auto-enabled single SDCafiine pack: %s", legacyMods[0].name.c_str());
     } else if (legacyMods.size() > 1) {
-        Logger::Warn("Detected %u SDCafiine packs. V0.2 will not choose one automatically; all legacy packs stay disabled until the selector UI is implemented.",
+        Logger::Info("Detected %u SDCafiine packs; Solar v0.3 selector will let the user choose.",
                      static_cast<unsigned int>(legacyMods.size()));
     }
 
     for (auto &mod : legacyMods) {
+        mod.defaultEnabled = mod.enabled;
+        mod.defaultPriority = mod.priority;
         mods.push_back(std::move(mod));
     }
 }

@@ -11,6 +11,7 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/wups/share/wups_rules
 
 WUT_ROOT := $(DEVKITPRO)/wut
+WUMS_ROOT := $(DEVKITPRO)/wums
 
 #-------------------------------------------------------------------------------
 # Project configuration
@@ -28,7 +29,7 @@ CFLAGS      := -g -Wall -Wextra -O2 -ffunction-sections $(MACHDEP)
 CFLAGS      += $(INCLUDE) -D__WIIU__ -D__WUT__ -D__WUPS__
 CXXFLAGS    := $(CFLAGS) -std=gnu++17
 ASFLAGS     := -g $(ARCH)
-LDFLAGS      = -g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) $(WUPSSPECS)
+LDFLAGS      = -g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -T$(WUMS_ROOT)/share/libmappedmemory.ld $(WUPSSPECS)
 
 ifeq ($(DEBUG),1)
 CXXFLAGS += -DDEBUG -g
@@ -40,8 +41,8 @@ CXXFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
 CFLAGS   += -DDEBUG -DVERBOSE_DEBUG -g
 endif
 
-LIBS       := -lwups -lwut -lcontentredirection
-LIBDIRS    := $(PORTLIBS) $(WUPS_ROOT) $(WUT_ROOT)
+LIBS       := -lwups -lwut -lmappedmemory -lcontentredirection
+LIBDIRS    := $(PORTLIBS) $(WUPS_ROOT) $(WUT_ROOT) $(WUMS_ROOT)
 
 #-------------------------------------------------------------------------------
 # Standard WUPS build rules

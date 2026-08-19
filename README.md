@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/solar-logo.png" width="500" alt="Solar Launcher">
+  <img src="Assets/Solar-logo.png" width="500" alt="Solar Launcher">
 </p>
 
 <h1 align="center">☀️ Solar Launcher</h1>

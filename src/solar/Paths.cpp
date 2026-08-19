@@ -38,6 +38,10 @@ std::string TitleDirectory(uint64_t titleId) {
     return std::string(GamesRoot) + "/" + TitleManager::FormatTitleId(titleId);
 }
 
+std::string SDCafiineTitleDirectory(uint64_t titleId) {
+    return std::string(SDCafiineRoot) + "/" + TitleManager::FormatTitleId(titleId);
+}
+
 bool EnsureTitleDirectory(uint64_t titleId) {
     const auto path = TitleDirectory(titleId);
     return EnsureDirectory(path.c_str());

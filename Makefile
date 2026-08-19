@@ -26,7 +26,7 @@ INCLUDES    := include src
 #-------------------------------------------------------------------------------
 CFLAGS      := -g -Wall -Wextra -O2 -ffunction-sections $(MACHDEP)
 CFLAGS      += $(INCLUDE) -D__WIIU__ -D__WUT__ -D__WUPS__
-CXXFLAGS    := $(CFLAGS) -std=gnu++20
+CXXFLAGS    := $(CFLAGS) -std=gnu++17
 ASFLAGS     := -g $(ARCH)
 LDFLAGS      = -g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) $(WUPSSPECS)
 
@@ -40,7 +40,7 @@ CXXFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
 CFLAGS   += -DDEBUG -DVERBOSE_DEBUG -g
 endif
 
-LIBS       := -lwups -lwut
+LIBS       := -lwups -lwut -lcontentredirection
 LIBDIRS    := $(PORTLIBS) $(WUPS_ROOT) $(WUT_ROOT)
 
 #-------------------------------------------------------------------------------

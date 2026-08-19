@@ -14,11 +14,16 @@ struct ModInfo {
     std::string version;
     std::string type;
     std::string declaredTitleId;
+    bool enabled = true;
+    int priority = 0;
+    bool hasContent = false;
+    bool hasAoc = false;
+    bool legacySDCafiine = false;
 };
 
 class ModManager {
 public:
-    static std::vector<ModInfo> ScanForTitle(uint64_t titleId);
+    static std::vector<ModInfo> ScanForTitle(uint64_t titleId, bool includeLegacySDCafiine = true);
 };
 
 } // namespace Solar

@@ -1,7 +1,9 @@
 {
   "name": "Example Solar Mod",
   "author": "Example Author",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "titleId": "00050000XXXXXXXX",
-  "type": "replacement"
+  "type": "replacement",
+  "enabled": true,
+  "priority": 100
 }

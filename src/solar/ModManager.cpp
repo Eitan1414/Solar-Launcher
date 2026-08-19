@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <utility>
@@ -14,6 +15,7 @@ namespace Solar {
 namespace {
 
 constexpr long MaxManifestSize = 64 * 1024;
+constexpr int LegacySDCafiinePriority = -1000;
 
 bool IsDirectory(const std::string &path) {
     struct stat info {};
@@ -53,20 +55,28 @@ std::string ReadTextFile(const std::string &path) {
     return result;
 }
 
-std::string ExtractJsonString(const std::string &json, const std::string &key) {
+size_t FindJsonValue(const std::string &json, const std::string &key) {
     const std::string quotedKey = "\"" + key + "\"";
     size_t cursor = json.find(quotedKey);
     if (cursor == std::string::npos) {
-        return {};
+        return std::string::npos;
     }
 
     cursor = json.find(':', cursor + quotedKey.size());
     if (cursor == std::string::npos) {
-        return {};
+        return std::string::npos;
     }
 
-    cursor = json.find('"', cursor + 1);
-    if (cursor == std::string::npos) {
+    ++cursor;
+    while (cursor < json.size() && std::isspace(static_cast<unsigned char>(json[cursor]))) {
+        ++cursor;
+    }
+    return cursor;
+}
+
+std::string ExtractJsonString(const std::string &json, const std::string &key) {
+    size_t cursor = FindJsonValue(json, key);
+    if (cursor == std::string::npos || cursor >= json.size() || json[cursor] != '"') {
         return {};
     }
 
@@ -104,6 +114,35 @@ std::string ExtractJsonString(const std::string &json, const std::string &key) {
     return value;
 }
 
+bool ExtractJsonBool(const std::string &json, const std::string &key, bool fallback) {
+    const size_t cursor = FindJsonValue(json, key);
+    if (cursor == std::string::npos) {
+        return fallback;
+    }
+
+    if (json.compare(cursor, 4, "true") == 0) {
+        return true;
+    }
+    if (json.compare(cursor, 5, "false") == 0) {
+        return false;
+    }
+    return fallback;
+}
+
+int ExtractJsonInt(const std::string &json, const std::string &key, int fallback) {
+    const size_t cursor = FindJsonValue(json, key);
+    if (cursor == std::string::npos || cursor >= json.size()) {
+        return fallback;
+    }
+
+    char *end = nullptr;
+    const long value = std::strtol(json.c_str() + cursor, &end, 10);
+    if (end == json.c_str() + cursor) {
+        return fallback;
+    }
+    return static_cast<int>(value);
+}
+
 std::string NormalizeTitleId(std::string value) {
     value.erase(std::remove_if(value.begin(), value.end(), [](unsigned char ch) {
         return !std::isxdigit(ch);
@@ -116,6 +155,11 @@ std::string NormalizeTitleId(std::string value) {
     return value;
 }
 
+void PopulateReplacementFlags(ModInfo &mod) {
+    mod.hasContent = IsDirectory(mod.path + "/content");
+    mod.hasAoc = IsDirectory(mod.path + "/aoc");
+}
+
 ModInfo ParseManifest(const std::string &directoryName, const std::string &directoryPath,
                       const std::string &manifest) {
     ModInfo mod;
@@ -126,6 +170,8 @@ ModInfo ParseManifest(const std::string &directoryName, const std::string &direc
     mod.version = ExtractJsonString(manifest, "version");
     mod.type = ExtractJsonString(manifest, "type");
     mod.declaredTitleId = ExtractJsonString(manifest, "titleId");
+    mod.enabled = ExtractJsonBool(manifest, "enabled", true);
+    mod.priority = ExtractJsonInt(manifest, "priority", 0);
 
     if (mod.name.empty()) {
         mod.name = directoryName;
@@ -140,20 +186,18 @@ ModInfo ParseManifest(const std::string &directoryName, const std::string &direc
         mod.type = "unknown";
     }
 
+    PopulateReplacementFlags(mod);
     return mod;
 }
 
-} // namespace
-
-std::vector<ModInfo> ModManager::ScanForTitle(uint64_t titleId) {
-    std::vector<ModInfo> mods;
+void ScanSolarMods(uint64_t titleId, std::vector<ModInfo> &mods) {
     const std::string currentTitleId = TitleManager::FormatTitleId(titleId);
     const std::string root = Paths::TitleDirectory(titleId);
 
     DIR *directory = opendir(root.c_str());
     if (directory == nullptr) {
-        Logger::Info("No mod directory for title %s", currentTitleId.c_str());
-        return mods;
+        Logger::Info("No Solar mod directory for title %s", currentTitleId.c_str());
+        return;
     }
 
     while (dirent *entry = readdir(directory)) {
@@ -193,6 +237,72 @@ std::vector<ModInfo> ModManager::ScanForTitle(uint64_t titleId) {
     }
 
     closedir(directory);
+}
+
+void ScanLegacySDCafiineMods(uint64_t titleId, std::vector<ModInfo> &mods) {
+    const std::string root = Paths::SDCafiineTitleDirectory(titleId);
+    DIR *directory = opendir(root.c_str());
+    if (directory == nullptr) {
+        return;
+    }
+
+    std::vector<ModInfo> legacyMods;
+    while (dirent *entry = readdir(directory)) {
+        const std::string name = entry->d_name;
+        if (name == "." || name == ".." || name.empty() || name[0] == '.') {
+            continue;
+        }
+
+        const std::string modPath = root + "/" + name;
+        if (!IsDirectory(modPath)) {
+            continue;
+        }
+
+        ModInfo mod;
+        mod.directoryName = name;
+        mod.path = modPath;
+        mod.name = name;
+        mod.author = "Unknown";
+        mod.version = "SDCafiine legacy";
+        mod.type = "sdcafiine";
+        mod.declaredTitleId = TitleManager::FormatTitleId(titleId);
+        mod.enabled = false;
+        mod.priority = LegacySDCafiinePriority;
+        mod.legacySDCafiine = true;
+        PopulateReplacementFlags(mod);
+
+        if (!mod.hasContent && !mod.hasAoc) {
+            continue;
+        }
+
+        legacyMods.push_back(std::move(mod));
+    }
+
+    closedir(directory);
+
+    if (legacyMods.size() == 1) {
+        legacyMods[0].enabled = true;
+        Logger::Info("Auto-enabled single SDCafiine pack: %s", legacyMods[0].name.c_str());
+    } else if (legacyMods.size() > 1) {
+        Logger::Warn("Detected %u SDCafiine packs. V0.2 will not choose one automatically; all legacy packs stay disabled until the selector UI is implemented.",
+                     static_cast<unsigned int>(legacyMods.size()));
+    }
+
+    for (auto &mod : legacyMods) {
+        mods.push_back(std::move(mod));
+    }
+}
+
+} // namespace
+
+std::vector<ModInfo> ModManager::ScanForTitle(uint64_t titleId, bool includeLegacySDCafiine) {
+    std::vector<ModInfo> mods;
+    ScanSolarMods(titleId, mods);
+
+    if (includeLegacySDCafiine) {
+        ScanLegacySDCafiineMods(titleId, mods);
+    }
+
     return mods;
 }
 

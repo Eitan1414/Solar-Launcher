@@ -120,8 +120,8 @@ Advanced addon support will require game-specific Solar APIs/adapters, because e
 
 ## 📂 Planned SD Structure
 
+```text
 SD:/wiiu/SolarLauncher/
-│
 ├── games/
 │   └── TITLE_ID/
 │       ├── ModName/
@@ -131,6 +131,9 @@ SD:/wiiu/SolarLauncher/
 │       │   └── addons/
 │       │
 │       └── AnotherMod/
+│           ├── mod.json
+│           ├── content/
+│           └── patches/
 │
 ├── config/
 ├── cache/

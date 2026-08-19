@@ -1,1 +1,1 @@
-![Solar Launcher Logo](assets/Solar-logo.png)
+![Solar Launcher Logo](Assets/Solar-logo.png)

@@ -1,0 +1,7 @@
+build/
+*.elf
+*.wps
+*.map
+.DS_Store
+.vscode/
+.idea/

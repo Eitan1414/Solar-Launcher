@@ -1,6 +1,5 @@
-![Solar Launcher Logo](Assets/Solar-logo.png)
 <p align="center">
-  <img src="assets/solar-logo.png" width="500" alt="Solar Launcher">
+  <img src="Assets/Solar-logo.png" width="500" alt="Solar Launcher">
 </p><h1 align="center">☀️ Solar Launcher</h1><p align="center">
   <b>Universal Wii U modding framework for Aroma</b>
 </p><p align="center">

@@ -657,7 +657,7 @@ Every contribution can help expand what is possible on the Wii U.
 
 **Solar Launcher**
 
-Created and led by **[Your GitHub username]**
+Created and led by **[Eitan1414/Pixel Plugin Studios]**
 
 Concept, project direction, testing, design and original idea by the Solar Launcher project creator.
 

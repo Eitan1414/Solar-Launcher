@@ -1,0 +1,31 @@
+name: Build Solar Launcher
+
+on:
+  push:
+    branches: ["main", "solar-core-v0.1", "solar-filemods-v0.2", "solar-menu-v0.3", "solar-patchengine-v0.4", "solar-gameadapter-v0.5"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build Wii U toolchain image
+        run: docker build -t solar-launcher-builder .
+
+      - name: Build SolarLauncher.wps
+        run: docker run --rm -v "$PWD:/project" solar-launcher-builder make
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v7
+        with:
+          name: SolarLauncher-wps
+          path: SolarLauncher.wps
+          if-no-files-found: error

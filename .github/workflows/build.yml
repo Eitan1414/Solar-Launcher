@@ -1,20 +1,19 @@
-name: Build Solar Launcher
+name: Build Solar Launcher - Cuphead Test 1B
 
 on:
   push:
-    branches: ["main", "solar-core-v0.1", "solar-filemods-v0.2", "solar-menu-v0.3", "solar-patchengine-v0.4", "solar-gameadapter-v0.5"]
-  pull_request:
+    branches: ["cuphead-test1b-verification"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  build-cuphead-test1b:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout verification branch
         uses: actions/checkout@v7
 
       - name: Build Wii U toolchain image
@@ -23,9 +22,9 @@ jobs:
       - name: Build SolarLauncher.wps
         run: docker run --rm -v "$PWD:/project" solar-launcher-builder make
 
-      - name: Upload plugin
+      - name: Upload Cuphead Test 1B plugin
         uses: actions/upload-artifact@v7
         with:
-          name: SolarLauncher-wps
+          name: SolarLauncher-Cuphead-Test1B-wps
           path: SolarLauncher.wps
           if-no-files-found: error

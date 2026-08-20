@@ -180,7 +180,9 @@ bool RegisterCompileTraceHook(const std::string &hookId, const CompileHookTarget
     data.virtualAddr = 0;
     data.replaceAddr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&my_mono_compile_method));
     data.replaceCall = reinterpret_cast<uint32_t *>(&real_mono_compile_method);
-    data.targetProcess = FP_TARGET_PROCESS_GAME;
+    // The official executable-targeting macros use FP_TARGET_PROCESS_ALL.
+    // Title ID, version and executable name still constrain this hook to Cuphead.
+    data.targetProcess = FP_TARGET_PROCESS_ALL;
     data.ReplaceInRPX.targetTitleIds = target.titleIds;
     data.ReplaceInRPX.targetTitleIdsCount = target.titleIdCount;
     data.ReplaceInRPX.versionMin = target.versionMin;
@@ -188,6 +190,9 @@ bool RegisterCompileTraceHook(const std::string &hookId, const CompileHookTarget
     data.ReplaceInRPX.executableName = target.executableName;
     data.ReplaceInRPX.textOffset = 0;
     data.ReplaceInRPX.functionName = "mono_compile_method";
+
+    Logger::Info("Mono Bridge: registering %s for executable %s with FP_TARGET_PROCESS_ALL",
+                 hookId.c_str(), target.executableName);
 
     return NativeHookRegistry::Register(hookId, data);
 }

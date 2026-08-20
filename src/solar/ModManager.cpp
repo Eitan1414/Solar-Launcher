@@ -155,9 +155,10 @@ std::string NormalizeTitleId(std::string value) {
     return value;
 }
 
-void PopulateReplacementFlags(ModInfo &mod) {
+void PopulatePayloadFlags(ModInfo &mod) {
     mod.hasContent = IsDirectory(mod.path + "/content");
     mod.hasAoc = IsDirectory(mod.path + "/aoc");
+    mod.hasPatches = IsDirectory(mod.path + "/patches");
 }
 
 ModInfo ParseManifest(const std::string &directoryName, const std::string &directoryPath,
@@ -188,7 +189,7 @@ ModInfo ParseManifest(const std::string &directoryName, const std::string &direc
         mod.type = "unknown";
     }
 
-    PopulateReplacementFlags(mod);
+    PopulatePayloadFlags(mod);
     return mod;
 }
 
@@ -271,7 +272,7 @@ void ScanLegacySDCafiineMods(uint64_t titleId, std::vector<ModInfo> &mods) {
         mod.enabled = false;
         mod.priority = LegacySDCafiinePriority;
         mod.legacySDCafiine = true;
-        PopulateReplacementFlags(mod);
+        PopulatePayloadFlags(mod);
 
         if (!mod.hasContent && !mod.hasAoc) {
             continue;
@@ -286,7 +287,7 @@ void ScanLegacySDCafiineMods(uint64_t titleId, std::vector<ModInfo> &mods) {
         legacyMods[0].enabled = true;
         Logger::Info("Auto-enabled single SDCafiine pack: %s", legacyMods[0].name.c_str());
     } else if (legacyMods.size() > 1) {
-        Logger::Info("Detected %u SDCafiine packs; Solar v0.3 selector will let the user choose.",
+        Logger::Info("Detected %u SDCafiine packs; Solar v0.4 selector will let the user choose.",
                      static_cast<unsigned int>(legacyMods.size()));
     }
 

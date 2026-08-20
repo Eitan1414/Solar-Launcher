@@ -23,6 +23,7 @@ struct ModInfo {
 
     bool hasContent = false;
     bool hasAoc = false;
+    bool hasPatches = false;
     bool legacySDCafiine = false;
 };
 

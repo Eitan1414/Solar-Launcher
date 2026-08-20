@@ -131,9 +131,9 @@ void Render(uint64_t titleId,
     OSScreenClearBufferEx(SCREEN_TV, 0);
     OSScreenClearBufferEx(SCREEN_DRC, 0);
 
-    PrintBoth(0, 0, "Solar Launcher v0.3");
+    PrintBoth(0, 0, "Solar Launcher v0.4");
     PrintBoth(0, 1, "Title: %s", TitleManager::FormatTitleId(titleId).c_str());
-    PrintBoth(0, 2, "Mods: %u | Conflicts: %u%s",
+    PrintBoth(0, 2, "Mods: %u | File conflicts: %u%s",
               static_cast<unsigned int>(mods.size()),
               static_cast<unsigned int>(conflicts.conflictingPaths),
               conflicts.truncated ? "+" : "");
@@ -165,9 +165,10 @@ void Render(uint64_t titleId,
         const ModInfo &mod = mods[selected];
         PrintBoth(0, 15, "%s | %s | %s",
                   mod.author.c_str(), mod.version.c_str(), mod.type.c_str());
-        PrintBoth(0, 16, "Files: content=%s aoc=%s",
+        PrintBoth(0, 16, "Payload: content=%s aoc=%s patches=%s",
                   mod.hasContent ? "yes" : "no",
-                  mod.hasAoc ? "yes" : "no");
+                  mod.hasAoc ? "yes" : "no",
+                  mod.hasPatches ? "yes" : "no");
     }
 
     PrintBoth(0, 18, "A Toggle   L/R Priority   Y Reset selected");

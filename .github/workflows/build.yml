@@ -2,7 +2,7 @@ name: Build Solar Launcher
 
 on:
   push:
-    branches: ["main", "solar-core-v0.1", "solar-filemods-v0.2", "solar-menu-v0.3"]
+    branches: ["main", "solar-core-v0.1", "solar-filemods-v0.2", "solar-menu-v0.3", "solar-patchengine-v0.4"]
   pull_request:
   workflow_dispatch:
 

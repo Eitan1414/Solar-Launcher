@@ -2,6 +2,7 @@
 #include "solar/Logger.hpp"
 #include "solar/ModManager.hpp"
 #include "solar/ModMenu.hpp"
+#include "solar/PatchEngine.hpp"
 #include "solar/Paths.hpp"
 #include "solar/RedirectEngine.hpp"
 #include "solar/SelectionStore.hpp"
@@ -13,7 +14,7 @@
 
 WUPS_PLUGIN_NAME("Solar Launcher");
 WUPS_PLUGIN_DESCRIPTION("Universal Wii U modding framework for Aroma.");
-WUPS_PLUGIN_VERSION("v0.3.0-dev");
+WUPS_PLUGIN_VERSION("v0.4.0-dev");
 WUPS_PLUGIN_AUTHOR("Eitan1414");
 WUPS_PLUGIN_LICENSE("Unlicensed");
 
@@ -24,16 +25,19 @@ namespace {
 
 constexpr const char *EnabledConfigId = "enabled";
 constexpr const char *FileModsConfigId = "file_mods_enabled";
+constexpr const char *PatchModsConfigId = "patch_mods_enabled";
 constexpr const char *LegacySDCafiineConfigId = "legacy_sdcafiine_enabled";
 constexpr const char *PreLaunchMenuConfigId = "prelaunch_menu_enabled";
 
 constexpr bool DefaultEnabled = true;
 constexpr bool DefaultFileModsEnabled = true;
+constexpr bool DefaultPatchModsEnabled = true;
 constexpr bool DefaultLegacySDCafiineEnabled = true;
 constexpr bool DefaultPreLaunchMenuEnabled = true;
 
 bool gEnabled = DefaultEnabled;
 bool gFileModsEnabled = DefaultFileModsEnabled;
+bool gPatchModsEnabled = DefaultPatchModsEnabled;
 bool gLegacySDCafiineEnabled = DefaultLegacySDCafiineEnabled;
 bool gPreLaunchMenuEnabled = DefaultPreLaunchMenuEnabled;
 
@@ -51,6 +55,11 @@ void EnabledChanged(ConfigItemBoolean *, bool newValue) {
 void FileModsChanged(ConfigItemBoolean *, bool newValue) {
     gFileModsEnabled = newValue;
     StoreBool(FileModsConfigId, gFileModsEnabled);
+}
+
+void PatchModsChanged(ConfigItemBoolean *, bool newValue) {
+    gPatchModsEnabled = newValue;
+    StoreBool(PatchModsConfigId, gPatchModsEnabled);
 }
 
 void LegacySDCafiineChanged(ConfigItemBoolean *, bool newValue) {
@@ -72,6 +81,12 @@ WUPSConfigAPICallbackStatus ConfigMenuOpenedCallback(WUPSConfigCategoryHandle ro
 
     if (WUPSConfigItemBoolean_AddToCategory(root, FileModsConfigId, "Enable file replacement mods",
                                             DefaultFileModsEnabled, gFileModsEnabled, &FileModsChanged) !=
+        WUPSCONFIG_API_RESULT_SUCCESS) {
+        return WUPSCONFIG_API_CALLBACK_RESULT_ERROR;
+    }
+
+    if (WUPSConfigItemBoolean_AddToCategory(root, PatchModsConfigId, "Enable memory/native patch mods",
+                                            DefaultPatchModsEnabled, gPatchModsEnabled, &PatchModsChanged) !=
         WUPSCONFIG_API_RESULT_SUCCESS) {
         return WUPSCONFIG_API_CALLBACK_RESULT_ERROR;
     }
@@ -117,23 +132,27 @@ INITIALIZE_PLUGIN() {
 
     LoadBoolSetting(EnabledConfigId, DefaultEnabled, gEnabled);
     LoadBoolSetting(FileModsConfigId, DefaultFileModsEnabled, gFileModsEnabled);
+    LoadBoolSetting(PatchModsConfigId, DefaultPatchModsEnabled, gPatchModsEnabled);
     LoadBoolSetting(LegacySDCafiineConfigId, DefaultLegacySDCafiineEnabled, gLegacySDCafiineEnabled);
     LoadBoolSetting(PreLaunchMenuConfigId, DefaultPreLaunchMenuEnabled, gPreLaunchMenuEnabled);
     WUPSStorageAPI_SaveStorage(false);
 
     Solar::RedirectEngine::Initialize();
-    Solar::Logger::Info("Solar Launcher v0.3 initialized");
+    Solar::PatchEngine::Initialize();
+    Solar::Logger::Info("Solar Launcher v0.4 initialized");
 }
 
 DEINITIALIZE_PLUGIN() {
+    Solar::PatchEngine::Shutdown();
     Solar::RedirectEngine::Shutdown();
-    Solar::Logger::Info("Solar Launcher v0.3 deinitialized");
+    Solar::Logger::Info("Solar Launcher v0.4 deinitialized");
 }
 
 ON_APPLICATION_START() {
     const uint64_t titleId = Solar::TitleManager::CurrentTitleId();
     const std::string titleIdText = Solar::TitleManager::FormatTitleId(titleId);
 
+    Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
 
     if (!Solar::TitleManager::IsGameTitle(titleId)) {
@@ -162,11 +181,6 @@ ON_APPLICATION_START() {
     Solar::Logger::Info("Detected title %s with %u compatible mod(s)",
                         titleIdText.c_str(), static_cast<unsigned int>(mods.size()));
 
-    if (!gFileModsEnabled) {
-        Solar::Logger::Info("File replacement mods are disabled; launching without redirection");
-        return;
-    }
-
     if (gPreLaunchMenuEnabled && !mods.empty()) {
         const Solar::MenuResult menu = Solar::ModMenu::Show(titleId, mods);
         if (menu.action == Solar::MenuAction::LaunchVanilla) {
@@ -179,21 +193,36 @@ ON_APPLICATION_START() {
         }
     }
 
-    const Solar::ConflictReport conflicts = Solar::ConflictDetector::Analyze(mods);
-    if (conflicts.conflictingPaths > 0) {
-        Solar::Logger::Warn("Launching with %u conflicting replacement path(s)%s",
-                            static_cast<unsigned int>(conflicts.conflictingPaths),
-                            conflicts.truncated ? " (scan truncated)" : "");
+    if (gFileModsEnabled) {
+        const Solar::ConflictReport conflicts = Solar::ConflictDetector::Analyze(mods);
+        if (conflicts.conflictingPaths > 0) {
+            Solar::Logger::Warn("Launching with %u conflicting replacement path(s)%s",
+                                static_cast<unsigned int>(conflicts.conflictingPaths),
+                                conflicts.truncated ? " (scan truncated)" : "");
+        }
+
+        if (Solar::RedirectEngine::IsAvailable()) {
+            Solar::RedirectEngine::Apply(mods);
+        } else {
+            Solar::Logger::Warn("File replacement engine unavailable; continuing without file redirection");
+        }
+    } else {
+        Solar::Logger::Info("File replacement mods are disabled");
     }
 
-    if (!Solar::RedirectEngine::IsAvailable()) {
-        Solar::Logger::Warn("File replacement engine unavailable; launching without redirection");
-        return;
+    if (gPatchModsEnabled) {
+        const Solar::PatchApplyReport patchReport = Solar::PatchEngine::Apply(titleId, mods);
+        Solar::Logger::Info("Patch summary: memory %u/%u applied, hooks %u/%u applied",
+                            static_cast<unsigned int>(patchReport.memoryPatchesApplied),
+                            static_cast<unsigned int>(patchReport.memoryPatchesFound),
+                            static_cast<unsigned int>(patchReport.hooksApplied),
+                            static_cast<unsigned int>(patchReport.hookRequestsFound));
+    } else {
+        Solar::Logger::Info("Memory/native patch mods are disabled");
     }
-
-    Solar::RedirectEngine::Apply(mods);
 }
 
 ON_APPLICATION_ENDS() {
+    Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
 }

@@ -41,7 +41,7 @@ CXXFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
 CFLAGS   += -DDEBUG -DVERBOSE_DEBUG -g
 endif
 
-LIBS       := -lwups -lwut -lmappedmemory -lcontentredirection
+LIBS       := -lwups -lwut -lmappedmemory -lcontentredirection -lfunctionpatcher
 LIBDIRS    := $(PORTLIBS) $(WUPS_ROOT) $(WUT_ROOT) $(WUMS_ROOT)
 
 #-------------------------------------------------------------------------------

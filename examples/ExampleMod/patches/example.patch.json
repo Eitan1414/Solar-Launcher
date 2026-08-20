@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "titleId": "00050000XXXXXXXX",
+  "enabled": false,
+  "patches": [
+    {
+      "name": "Disabled documentation example",
+      "address": "0x12345678",
+      "expected": "00 00 00 02",
+      "replace": "00 00 00 03",
+      "executable": false
+    }
+  ],
+  "hooks": [
+    "example.game.nativeHook"
+  ]
+}

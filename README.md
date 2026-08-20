@@ -875,6 +875,8 @@ The long-term goal is that research done for one game can be packaged into an ad
 
 **Solar Launcher** was created thanks to the work of **Pixel Plugins Studios**, the development and project direction of **Eitan1414**, and development assistance from **OpenAI's GPT-5.6 Sol**.
 
+**Solar Launcher is currently the main project of Pixel Plugins Studios.**
+
 - **Pixel Plugins Studios** — work and contributions that helped make the creation of Solar Launcher possible.
 - **Eitan1414** — creator/developer, project direction, implementation, testing, design and development of Solar Launcher.
 - **OpenAI's GPT-5.6 Sol** — development assistance, technical research, brainstorming, architecture design, code assistance and support throughout the creation of Solar Launcher.

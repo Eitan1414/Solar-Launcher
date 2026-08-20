@@ -16,17 +16,22 @@
 
 ## About
 
-**Solar Launcher** is an experimental universal modding framework for the **Wii U**, designed to run under **Aroma**.
+**Solar Launcher** is an experimental universal modding framework for the **Wii U**, designed for the **Aroma** environment.
 
-The goal is to go beyond traditional file replacement and provide one unified system for loading different kinds of mods.
+The goal is to provide one common system for several kinds of Wii U mods instead of requiring a completely different workflow for every project.
 
-Solar Launcher is designed to detect the game being launched through its **Title ID**, find compatible mods on the SD card, and allow the user to choose which ones should be enabled.
+Solar detects the title being launched through its **Title ID**, scans compatible mods on the SD card, lets the user enable or disable them, and then applies the supported modifications before the game continues.
 
-> ⚠️ Solar Launcher is currently in early development. Most features described below are planned and may not be implemented yet.
+Solar is being designed around two levels of modding:
+
+1. **Universal modding**, which can work for many games without understanding their executable code.
+2. **Game-specific modding**, which uses optional Game Adapters for advanced gameplay modifications.
+
+> ⚠️ Solar Launcher is still experimental. V0.1–V0.4 are active development branches and must still be validated extensively on real Wii U hardware.
 
 ---
 
-## ☀️ Goals
+## ☀️ Current Direction
 
 Solar Launcher aims to support:
 
@@ -34,20 +39,63 @@ Solar Launcher aims to support:
 - 📁 File replacement
 - 🎵 Custom music and sounds
 - ⚙️ Gameplay patches
-- 🧠 Memory/function patches
+- 🧠 Memory patches
+- 🪝 Function hooks
 - 🧩 Multiple mods at the same time
 - ⚠️ Mod conflict detection
 - 📦 SDCafiine-style mod packs
+- 🎮 Game-specific adapters/APIs
 - 🗺️ Custom levels and maps
 - 👤 Custom characters
-- 🎮 Game-specific mod APIs
-- ➕ Advanced addons that can add new content instead of only replacing existing content
+- ➕ Advanced addons that add new content instead of only replacing existing files
+- 🔍 Future automatic RPX analysis and signature scanning
 
 ---
 
-## 🎮 How it should work
+## ✅ What Solar V0.4 is designed to do
 
-When a compatible Wii U title starts:
+Solar V0.4 builds on the previous versions.
+
+### Solar Core
+
+- detect the currently launched Wii U game using its Title ID
+- create and scan Solar directories on the SD card
+- read `mod.json`
+- keep per-game mod selections
+- log Solar activity
+
+### File Mods
+
+- redirect `/vol/content`
+- redirect `/vol/aoc`
+- load multiple replacement packs
+- use priorities between replacement layers
+- detect existing SDCafiine-style packs
+
+### Mod Management
+
+- pre-launch mod menu
+- enable or disable mods
+- change mod priority
+- save selections per Title ID
+- detect replacement-file conflicts
+- launch once without mods
+
+### Patch Engine
+
+- scan `patches/`
+- apply declarative memory patches
+- verify expected bytes before writing
+- reject unsafe/mismatching patches
+- restore original bytes when the game closes
+- prepare native function hooks through FunctionPatcherModule
+- provide a registry for future Game Adapter hooks
+
+> The code exists in the V0.4 branch, but the final `.wps` still needs full compile and real-console validation before Solar can be considered stable.
+
+---
+
+## 🎮 General Launch Flow
 
 ```text
 Wii U Menu
@@ -56,91 +104,129 @@ Game launched
      ↓
 ☀ Solar Launcher
      ↓
-Title ID detected
+Detect Title ID
      ↓
-Compatible mods found
+Scan compatible mods
      ↓
-Select enabled mods
+Load saved selections
      ↓
-Apply file replacements / patches / addons
+Solar pre-launch menu
      ↓
-Start the game
+Apply selected systems
+     ├── File redirection
+     ├── Memory patches
+     └── Game Adapter hooks
+     ↓
+Game continues
 ```
 
-If no compatible mod is installed, the game should simply launch normally.
+If no compatible mod is installed, the game should launch normally.
 
 ---
 
-## 🧩 Mod Types
+# 🧩 Mod Types
 
-### 📁 File Replacement
+## 📁 1. Replacement Mods
 
-The simplest type of Solar mod.
+Replacement mods do not normally need a Game Adapter or reverse engineering of the RPX.
 
-Used for things such as:
+They can replace things such as:
 
 - textures
 - sprites
 - music
 - sound effects
-- UI
-- other game files
-
-The goal is to provide functionality similar to **SDCafiine** while integrating it into the Solar mod manager.
+- UI files
+- other game resources
 
 Example:
 
 ```text
 Original game file:
-
 /vol/content/player/texture.dds
 
         ↓
 
 Solar replacement:
-
 SD:/wiiu/SolarLauncher/games/TITLE_ID/MyMod/content/player/texture.dds
 ```
 
+These mods use the same general concept as SDCafiine while integrating into Solar's own mod manager.
+
 ---
 
-### ⚙️ Gameplay Patches
+## ⚙️ 2. Patch Mods
 
-Solar will eventually be able to apply modifications to the running game.
+Patch mods change values or executable behavior.
 
 Examples:
 
-- changing gameplay values
-- changing player limits
-- modifying mechanics
-- hooking game functions
-- changing game behavior
-- memory patches
-- function replacement
+- changing a gameplay value
+- changing a player limit
+- changing timers
+- modifying game rules
+- changing instructions in memory
 
-For example:
+A Solar V0.4 memory patch can use a format like:
 
-```text
-Original game:
-
-Maximum Players = 2
-
-        ↓
-
-Solar gameplay patch
-
-        ↓
-
-Maximum Players = 4
+```json
+{
+  "formatVersion": 1,
+  "titleId": "00050000XXXXXXXX",
+  "patches": [
+    {
+      "name": "Example value",
+      "address": "0x12345678",
+      "expected": "00 00 00 02",
+      "replace": "00 00 00 03"
+    }
+  ]
+}
 ```
+
+The `expected` bytes are important.
+
+Solar should only apply the patch when the bytes currently in memory match the expected bytes. This reduces the risk of writing a patch to the wrong game version or wrong address.
 
 ---
 
-### ➕ Addons
+## 🪝 3. Native Hook Mods
 
-The long-term goal of Solar is to support **real additional content**.
+Some gameplay modifications cannot be implemented with a simple value replacement.
 
-Instead of only replacing:
+For example:
+
+- creating a third player
+- changing camera logic
+- extending a HUD
+- adding a new game state
+- modifying AI behavior
+- intercepting a game function
+
+For these cases Solar uses **native hooks**.
+
+A patch manifest can request a hook by ID:
+
+```json
+{
+  "hooks": [
+    "cuphead.player.createPlayer3",
+    "cuphead.camera.multiplayer3"
+  ]
+}
+```
+
+However, Solar does **not** execute arbitrary native machine code from the SD card.
+
+The requested hook ID must already be registered by a trusted **Solar Game Adapter** compiled for that game.
+
+---
+
+## ➕ 4. Addons
+
+The long-term goal is to support real additional content.
+
+Instead of only doing:
 
 ```text
 Original Level
@@ -148,7 +234,7 @@ Original Level
 Modified Level
 ```
 
-a Solar addon could potentially allow:
+an addon could eventually allow:
 
 ```text
 Original Levels
@@ -160,11 +246,38 @@ New Boss
 New Character
 ```
 
-Advanced addon support will require **game-specific Solar APIs/adapters**, because every game handles levels, characters, saves and other content differently.
+This kind of integration usually requires a Game Adapter because every game stores and registers content differently.
 
 ---
 
-## 📂 Planned SD Structure
+## 📦 5. Total Mods
+
+A Total Mod combines several Solar systems.
+
+Example:
+
+```text
+Cuphead 3 Player
+
+TOTAL MOD
+├── File Replacement
+│   └── Player 3 sprites / HUD assets
+│
+├── Memory Patches
+│   └── Small executable/data changes
+│
+└── Cuphead Game Adapter
+    ├── Create Player 3
+    ├── Controller 3
+    ├── Camera
+    ├── HUD
+    ├── Revive
+    └── Boss targeting
+```
+
+---
+
+# 📂 SD Structure
 
 ```text
 SD:/wiiu/SolarLauncher/
@@ -173,6 +286,7 @@ SD:/wiiu/SolarLauncher/
 │       ├── ModName/
 │       │   ├── mod.json
 │       │   ├── content/
+│       │   ├── aoc/
 │       │   ├── patches/
 │       │   └── addons/
 │       │
@@ -182,19 +296,19 @@ SD:/wiiu/SolarLauncher/
 │           ├── patches/
 │           └── addons/
 │
+├── adapters/        # planned external adapter system
 ├── config/
 ├── cache/
 └── logs/
 ```
 
-A basic Solar mod could contain:
+A basic mod can look like:
 
 ```text
 MyMod/
 ├── mod.json
 ├── content/
-├── patches/
-└── addons/
+└── patches/
 ```
 
 Example `mod.json`:
@@ -205,170 +319,456 @@ Example `mod.json`:
   "author": "Example Author",
   "version": "1.0.0",
   "titleId": "00050000XXXXXXXX",
-  "type": "replacement"
+  "type": "total_mod",
+  "enabled": true,
+  "priority": 100
 }
 ```
 
 ---
 
-## ☕ SDCafiine Compatibility
+# ☕ SDCafiine Compatibility
 
-One of Solar Launcher's goals is to support existing **SDCafiine-style file replacement packs** whenever possible.
+Solar is designed to understand both native Solar mods and existing SDCafiine-style replacement packs.
 
-This would allow users to keep using existing Wii U texture and file packs while benefiting from Solar's mod management system.
-
-Solar Launcher is not intended to simply replace SDCafiine, but to build upon the same general idea and extend it toward more advanced types of modding.
-
-Solar could support both structures:
-
-### Solar native mods
+### Solar native mod
 
 ```text
-SD:/wiiu/SolarLauncher/
-└── games/
-    └── TITLE_ID/
-        └── MyMod/
-            ├── mod.json
-            └── content/
+SD:/wiiu/SolarLauncher/games/TITLE_ID/MyMod/
+├── mod.json
+└── content/
 ```
 
-### Existing SDCafiine packs
+### Existing SDCafiine pack
 
 ```text
-SD:/wiiu/sdcafiine/
-└── TITLE_ID/
-    └── MyTexturePack/
-        └── content/
+SD:/wiiu/sdcafiine/TITLE_ID/MyTexturePack/
+└── content/
 ```
 
-Solar could detect both automatically.
+This means users should not need to rebuild an old texture pack just because they start using Solar.
+
+For safety, running the standalone SDCafiine plugin and Solar's file redirection at the same time is not recommended while Solar is in development, because both can create ContentRedirection layers for the same game.
 
 ---
 
-## ⚠️ Mod Conflicts
+# ⚠️ Mod Conflicts and Priorities
 
-Solar is planned to detect when multiple mods try to replace the same file.
+If two enabled mods replace the same path, Solar can detect that conflict.
 
-For example:
+Example:
 
 ```text
 HD Texture Pack
-└── player/
-    └── character.texture
+└── player/character.texture
 
 Custom Character
-└── player/
-    └── character.texture
+└── player/character.texture
 ```
 
-Solar could warn the user:
+Solar can report that both mods modify the same file.
+
+The higher-priority Solar layer should win.
 
 ```text
-⚠ MOD CONFLICT DETECTED
-
-2 mods modify:
-
-player/character.texture
-
-Priority:
-
-1. Custom Character
-2. HD Texture Pack
+Base Game
+   ↓
+Priority 0   — HD Texture Pack
+   ↓
+Priority 50  — Custom Music
+   ↓
+Priority 100 — Custom Character
 ```
-
-The mod with the highest priority would be loaded.
-
-This would make it possible to combine multiple mods while reducing unexpected conflicts.
 
 ---
 
-## 🪐 Mod Layer System
+# 🌍 What is a Solar Game Adapter?
 
-Solar could treat enabled mods as layers.
+A **Game Adapter** teaches Solar how a specific game's internal systems work.
 
-For example:
-
-```text
-Original Game
-     ↓
-HD Texture Pack
-     ↓
-Custom Music Pack
-     ↓
-Gameplay Mod
-     ↓
-Custom Character Mod
-     ↓
-Game starts
-```
-
-When multiple mods modify the same resource, Solar would follow the configured priority order.
-
----
-
-## 🎯 First Advanced Test Project
-
-One of the first advanced projects planned for Solar Launcher is a **3–4 player mod for the Wii U port of Cuphead**.
-
-This project will help test several Solar systems at once:
-
-- additional players
-- additional controllers
-- gameplay patches
-- custom player sprites
-- HUD modifications
-- file replacement
-- game-specific patches
-
-The goal is to expand Cuphead's existing local multiplayer support beyond two players.
-
-Concept:
+Solar's universal systems know how to do generic operations such as:
 
 ```text
-Player 1 → Cuphead
-Player 2 → Mugman
-Player 3 → Custom Mugman Variant
-Player 4 → Custom Mugman Variant
+Replace a file
+Apply bytes to an address
+Enable a mod
+Manage priorities
 ```
 
-Players 3 and 4 are planned to support custom visual variants based on existing characters.
+But Solar cannot universally know what a game's functions mean.
 
-This project could later serve as an early experiment for a future **Solar Cuphead API** capable of supporting more advanced fan-made content.
+For example, Solar cannot automatically assume that a random function inside a game is:
 
-Examples could eventually include:
+```text
+CreatePlayer()
+RevivePlayer()
+UpdateCamera()
+RegisterLevel()
+```
 
-- fan-made levels
-- new bosses
-- new Run 'n Gun stages
-- new playable characters
-- custom islands
-- new weapons
-- new charms
-- additional music
-- additional visual content
+Every game is built differently.
 
----
-
-## 🌍 Solar Game APIs
-
-Some types of content cannot be loaded universally because every game handles its internal systems differently.
-
-Solar therefore plans to support optional **game-specific APIs/adapters**.
-
-For example:
+A Game Adapter provides that missing game-specific knowledge.
 
 ```text
 ☀ Solar Launcher
 │
-├── Solar Cuphead API
-├── Solar Mario Kart 8 API
-├── Solar Minecraft API
-└── Other Game Adapters
+├── Universal Core
+│   ├── Title Manager
+│   ├── Mod Manager
+│   ├── Redirect Engine
+│   ├── Patch Engine
+│   └── Conflict Manager
+│
+└── Game Adapters
+    ├── Cuphead Adapter
+    ├── Mario Kart 8 Adapter
+    ├── Minecraft Adapter
+    └── Other community adapters
 ```
 
-These adapters could expose systems that mod creators can use without having to manually reverse-engineer every part of a game.
+---
 
-Conceptually, a game API could support actions such as:
+## Example: Cuphead Adapter
+
+A future Cuphead Adapter could expose systems such as:
+
+```text
+Cuphead Adapter
+├── CreatePlayer3()
+├── RegisterController3()
+├── ExtendHUD()
+├── PatchCameraFor3Players()
+├── EnablePlayer3Revive()
+└── AddPlayer3BossTargeting()
+```
+
+A mod could then request those known hooks without needing to contain executable code itself.
+
+The Cuphead Adapter would contain the game-specific function addresses, signatures or hook implementations that Solar needs.
+
+---
+
+# ❓ Does every user need to extract their RPX?
+
+**No.**
+
+There are two different roles:
+
+### Normal user
+
+A normal user who downloads an already-supported mod should not need to extract or reverse engineer anything.
+
+```text
+Download mod
+     ↓
+Put it on the SD card
+     ↓
+Solar detects it
+     ↓
+Launch
+```
+
+### Developer adding support for a new game
+
+If a developer wants to create a deep gameplay mod for a game Solar does not understand yet, that developer may need to analyze that game's RPX and sometimes related RPL files.
+
+```text
+New unsupported game
+        ↓
+Analyze RPX/RPL once
+        ↓
+Find important functions/data
+        ↓
+Create Game Adapter
+        ↓
+Publish adapter
+        ↓
+Other users reuse it
+```
+
+The reverse engineering should therefore be done **once by the developer/community**, not once by every player.
+
+---
+
+# 🧠 Why advanced mods often need RPX analysis
+
+Simple replacement mods usually do not require the executable.
+
+```text
+Texture pack             → usually no RPX analysis
+Music replacement        → usually no RPX analysis
+UI replacement           → usually no RPX analysis
+SDCafiine-style pack     → usually no RPX analysis
+```
+
+Advanced gameplay mods are different.
+
+```text
+Add another player       → likely RPX analysis
+Change game logic        → likely RPX analysis
+Extend HUD logic         → likely RPX analysis
+Add new entity systems   → likely RPX analysis
+Deep addon integration   → likely RPX/RPL analysis
+```
+
+The RPX is useful because it contains the executable code of the game that must be understood before safe hooks or patches can be created.
+
+---
+
+# 🔍 Future: Solar Auto Analyzer
+
+One of Solar's long-term goals is to reduce the amount of manual reverse engineering required when supporting a new game.
+
+The proposed **Solar Auto Analyzer** would not magically understand an entire game, but it could automate a large amount of repetitive analysis.
+
+Concept:
+
+```text
+Game RPX
+   ↓
+Solar Auto Analyzer
+   ↓
+Parse executable structure
+   ↓
+Disassemble PowerPC code
+   ↓
+Find strings / imports / exports
+   ↓
+Build references between code and data
+   ↓
+Search known signatures
+   ↓
+Generate candidate functions
+   ↓
+Developer verifies results
+   ↓
+Game Adapter
+```
+
+---
+
+## What the analyzer could realistically automate
+
+Potential automated tasks include:
+
+- identify RPX sections
+- locate executable and data regions
+- list imports and exports
+- extract useful strings
+- find references to strings
+- locate repeated code patterns
+- calculate function signatures
+- compare different versions of the same game
+- search a known signature in another region/version
+- identify likely functions for manual inspection
+- generate adapter templates
+
+For example, if analysis finds strings such as:
+
+```text
+Player
+PlayerTwo
+Join
+Camera
+Revive
+```
+
+Solar Analyzer could identify the code that references those strings and mark those functions as candidates for further investigation.
+
+This does **not** prove what a function does, but it can greatly reduce the search space.
+
+---
+
+# 🧬 Signature Scanning
+
+Hardcoded addresses are fragile because a game update can move a function.
+
+Example:
+
+```text
+Cuphead version A
+Player function → 0x02012340
+
+Cuphead version B
+Player function → 0x02018A20
+```
+
+Instead of storing only one address, an adapter can eventually use a signature:
+
+```text
+94 21 ?? ?? 7C 08 02 A6 ?? ?? ?? ??
+```
+
+Solar can search for the signature when the game launches and resolve the current address automatically.
+
+This can make one adapter more tolerant of different versions, although signatures still need validation to prevent false matches.
+
+---
+
+# 🖥️ Wii U Analyzer vs PC Analyzer
+
+A full reverse-engineering suite would be too heavy and unnecessary inside a Wii U plugin.
+
+The proposed design separates the work.
+
+## On the Wii U
+
+Solar can eventually perform lightweight runtime analysis:
+
+- Title ID detection
+- version checks
+- memory validation
+- signature scanning
+- resolving known functions
+- safe patch application
+
+## On PC
+
+A future **Solar Analyzer** desktop tool could perform deeper offline analysis:
+
+- parse RPX/RPL files
+- disassemble PowerPC code
+- build cross-references
+- analyze strings and functions
+- compare versions
+- integrate with tools such as Ghidra
+- generate adapter skeletons
+
+Possible output:
+
+```text
+Cuphead.adapter.json
+```
+
+or generated source such as:
+
+```cpp
+RegisterFunction("cuphead.playerManager", address);
+RegisterFunction("cuphead.camera", address);
+RegisterFunction("cuphead.revive", address);
+```
+
+A developer would then review and test those results before publishing the adapter.
+
+---
+
+# 🚫 What automatic analysis cannot guarantee
+
+Automatic reverse engineering has limits.
+
+A machine can disassemble code and detect patterns, but it cannot safely guarantee from arbitrary code that:
+
+```text
+"this function creates Player 3"
+```
+
+or:
+
+```text
+"this function controls multiplayer revives"
+```
+
+without enough symbols, recognizable patterns, previous knowledge or human validation.
+
+Solar's goal should therefore be:
+
+> **Automate the repetitive reverse-engineering work, not remove the need for validation.**
+
+A realistic workflow is:
+
+```text
+RPX
+ ↓
+Automatic analysis
+ ↓
+Candidate functions / signatures
+ ↓
+Human verification
+ ↓
+Adapter
+ ↓
+Reusable support for the community
+```
+
+---
+
+# 🔌 Future External Adapter System
+
+The long-term architecture should avoid recompiling Solar Launcher every time support for another game is added.
+
+Current V0.4 native hooks are registered inside the compiled Solar plugin. This is useful for development, but it is not the desired final architecture.
+
+The planned direction is:
+
+```text
+SolarLauncher.wps
+
+SD:/wiiu/SolarLauncher/
+├── adapters/
+│   ├── Cuphead/
+│   ├── MarioKart8/
+│   └── AnotherGame/
+│
+└── games/
+```
+
+A community developer could then create a Game Adapter separately from the Solar Core.
+
+The goal is:
+
+```text
+Improve Solar once to support adapters
+              ↓
+Develop new game adapters independently
+              ↓
+No need to redesign the core for every game
+```
+
+The exact secure module format for external native adapters is **not implemented yet** and must be designed carefully before arbitrary adapter loading is enabled.
+
+---
+
+# 🎯 First Advanced Test Project: Cuphead 3 Player
+
+One of Solar's first advanced test cases is planned to be a **3-player mod for the Wii U port of Cuphead**.
+
+The current concept is:
+
+```text
+Player 1 → Cuphead
+Player 2 → Mugman
+Player 3 → Mugman-based custom character
+```
+
+Player 3 is planned to use Mugman's general animation base with:
+
+- a violet/purple nose
+- a violet/purple straw
+- a distinct grimace during idle
+
+The project should test several Solar systems together:
+
+- custom player assets
+- additional controller handling
+- player creation hooks
+- camera modifications
+- HUD extension
+- revive behavior
+- boss targeting
+- memory patches
+- file replacement
+- Game Adapter integration
+
+The actual Cuphead Adapter work will begin after the Wii U Cuphead RPX has been legally extracted and analyzed.
+
+---
+
+# 🌍 Future Game APIs
+
+Once a Game Adapter exposes reliable internal systems, Solar could provide a higher-level API for mod creators.
+
+Conceptually:
 
 ```text
 RegisterLevel()
@@ -380,131 +780,34 @@ RegisterWeapon()
 RegisterItem()
 ```
 
-The exact available functionality would depend on each supported game.
+The available API would depend entirely on what the target game supports and what the adapter has implemented.
 
 ---
 
-## 🗺️ Example: Cuphead Fan-Made Island
+# 🗺️ Example Future Cuphead Addon
 
-A future Cuphead addon could theoretically look like:
+A future Cuphead addon might look like:
 
 ```text
 FanmadeIsland/
 ├── addon.json
 ├── island.json
-│
 ├── levels/
 │   ├── boss01/
 │   ├── boss02/
 │   └── runngun01/
-│
 ├── map/
 │   └── island5/
-│
 ├── sprites/
 ├── music/
 └── sounds/
 ```
 
-For example, `island.json` could describe the additional content:
-
-```json
-{
-  "name": "Inkwell Island 5",
-  "levels": [
-    {
-      "name": "Clockwork Chaos",
-      "type": "boss",
-      "path": "levels/boss01"
-    },
-    {
-      "name": "Toon Town Trouble",
-      "type": "run_and_gun",
-      "path": "levels/runngun01"
-    }
-  ]
-}
-```
-
-Solar would detect the addon and use the **Solar Cuphead API** to integrate the additional content into the game.
+Solar would detect the addon and the Cuphead Adapter/API would handle the game-specific integration.
 
 ---
 
-## 🛠️ Development
-
-Solar Launcher is planned around the Wii U **Aroma** environment and the **Wii U Plugin System (WUPS)**.
-
-The project is currently experimental and under active development.
-
----
-
-## 🗓️ Development Roadmap
-
-### v0.1 — Solar Core
-
-- Title ID detection
-- SD mod scanning
-- `mod.json` support
-- Enable/disable mods
-- Basic configuration system
-- Basic logging
-
-### v0.2 — File Mods
-
-- File redirection
-- Texture/file packs
-- Initial SDCafiine compatibility
-- Multiple replacement packs
-- Basic Solar mod menu
-
-### v0.3 — Mod Management
-
-- Multiple simultaneous mods
-- Mod priorities
-- Conflict detection
-- Better mod metadata
-- Dependency support
-
-### v0.4 — Patch Engine
-
-- Memory patches
-- Function hooks
-- Game/version-specific patches
-- Improved debugging and logging
-
-### v0.5 — Advanced Mods
-
-- First advanced gameplay mods
-- Initial Cuphead 3-player experiments
-- Custom character support
-
-### v0.6 — Cuphead 4 Player
-
-- Four local players
-- P3/P4 controller support
-- Custom P3/P4 sprites
-- HUD extensions
-- Camera modifications
-- Revive support
-- Boss targeting modifications
-
-### Future
-
-- Advanced addons
-- Game APIs
-- Custom levels
-- Custom maps
-- Custom characters
-- New gameplay content
-- Addon dependencies
-- Mod profiles
-- Community-created Game APIs
-
----
-
-## 🔧 Planned Solar Architecture
-
-Solar Launcher is planned around several main systems:
+# 🔧 Solar Architecture
 
 ```text
 ☀ Solar Launcher
@@ -512,158 +815,162 @@ Solar Launcher is planned around several main systems:
 ├── Title Manager
 │   ├── Detect current game
 │   ├── Read Title ID
-│   └── Detect game version
+│   └── Version awareness
 │
 ├── Mod Manager
-│   ├── Scan installed mods
+│   ├── Scan mods
 │   ├── Read mod.json
-│   ├── Enable / disable mods
-│   ├── Handle dependencies
-│   └── Handle priorities
+│   ├── Enable / disable
+│   └── Priorities
 │
 ├── Redirect Engine
-│   ├── Textures
-│   ├── Audio
-│   ├── Sprites
-│   ├── UI
-│   └── Game files
+│   ├── Content files
+│   ├── AOC files
+│   └── SDCafiine compatibility
 │
 ├── Patch Engine
 │   ├── Memory patches
-│   ├── Function hooks
-│   ├── Gameplay modifications
-│   └── Version-specific patches
+│   ├── Expected-byte validation
+│   ├── Patch restoration
+│   └── Native hook requests
 │
 ├── Conflict Manager
-│   ├── Detect file conflicts
-│   ├── Detect incompatible mods
-│   └── Resolve priorities
+│   └── Replacement conflicts
 │
-└── Addon Engine
-    ├── Game APIs
+├── Native Hook Registry
+│   └── Registered Game Adapter hooks
+│
+├── Game Adapter Layer
+│   ├── Cuphead
+│   ├── Mario Kart 8
+│   └── Community adapters
+│
+├── Auto Analyzer (future)
+│   ├── RPX parsing
+│   ├── signatures
+│   ├── references
+│   └── adapter generation assistance
+│
+└── Addon Engine (future)
     ├── Levels
     ├── Maps
     ├── Characters
-    ├── Bosses
     └── Additional content
 ```
 
 ---
 
-## ☀️ Solar Launcher Flow
+# 🗓️ Development Roadmap
 
-```text
-              Wii U Menu
-                   │
-                   ↓
-              Start a Game
-                   │
-                   ↓
-          ☀ Solar Launcher
-                   │
-                   ↓
-           Detect Title ID
-                   │
-                   ↓
-       Search Compatible Mods
-                   │
-                   ↓
-            Solar Mod Menu
-                   │
-          ┌────────┴────────┐
-          │                 │
-          ↓                 ↓
-     File Mods         Code Patches
-          │                 │
-          └────────┬────────┘
-                   │
-                   ↓
-              Addons/API
-                   │
-                   ↓
-            Resolve Conflicts
-                   │
-                   ↓
-              Launch Game
-```
+## v0.1 — Solar Core
 
----
+- Title ID detection
+- SD mod scanning
+- `mod.json`
+- basic configuration
+- logging
 
-## 📦 Solar Mod Types
+## v0.2 — File Mods
 
-Solar Launcher currently plans four main mod categories:
+- ContentRedirection integration
+- `/vol/content` replacement layers
+- `/vol/aoc` replacement layers
+- multiple file mods
+- SDCafiine pack detection
 
-```text
-[1] REPLACEMENT
-    └── Textures, audio, sprites and game files
+## v0.3 — Mod Management
 
-[2] PATCH
-    └── Memory and gameplay modifications
+- pre-launch menu
+- enable / disable mods
+- per-game selections
+- priorities
+- file conflict detection
+- vanilla launch option
 
-[3] ADDON
-    └── New levels, maps, characters and content
+## v0.4 — Patch Engine
 
-[4] TOTAL MOD
-    └── Combination of replacements, patches and addons
-```
+- declarative memory patches
+- expected-byte validation
+- original-byte restoration
+- overlapping-patch protection
+- FunctionPatcher integration
+- Native Hook Registry foundation
+- patch-only mod support
 
-Example:
+## v0.5 — Game Adapter Foundation
 
-```text
-Cuphead 4 Player
+Planned:
 
-Type:
-TOTAL MOD
+- formal Game Adapter interface
+- Cuphead Adapter research
+- first Cuphead 3-player experiments
+- signature resolver
+- version-aware adapter data
 
-Uses:
-├── File Replacement
-│   └── P3/P4 sprites and HUD
-│
-├── Gameplay Patches
-│   └── 4-player support
-│
-└── Game API
-    └── Cuphead-specific integration
-```
+## v0.6 — Cuphead Multiplayer Expansion
+
+Planned:
+
+- stable 3-player gameplay
+- optional 4-player expansion
+- P3/P4 controllers
+- HUD extensions
+- camera changes
+- revive support
+- boss targeting
+- custom character assets
+
+## Future
+
+- external Game Adapter format
+- Solar Auto Analyzer
+- PC RPX/RPL Analyzer
+- Ghidra-assisted adapter generation
+- signature database
+- advanced addons
+- custom levels
+- custom maps
+- mod profiles
+- community-created Game APIs
 
 ---
 
-## 🤝 Contributions
+# 🤝 Contributions
 
-Solar Launcher is intended to become an open modding framework for the Wii U community.
+Solar Launcher is intended to become an open Wii U modding framework.
 
-Contributions are welcome in areas such as:
+Useful contributions include:
 
 - code
 - testing
 - documentation
 - game research
+- RPX/RPL reverse engineering
+- signature research
+- adapter development
 - mod development
 - bug reports
 - UI design
-- reverse engineering
-- ideas
-- feature suggestions
-- game adapters
-- addon development
+- tools
+- tutorials
 
-Every contribution can help expand what is possible on the Wii U.
+The long-term goal is that research done for one game can be packaged into an adapter and reused by the rest of the community.
 
 ---
 
-## ❤️ Credits
+# ❤️ Credits
 
-### ☀️ Project
+## ☀️ Project
 
 **Solar Launcher**
 
-Created and led by **[Your GitHub username]**
+Created and led by **Eitan1414**.
 
 Concept, project direction, testing, design and original idea by the Solar Launcher project creator.
 
 ---
 
-### 🤖 Development Assistance
+## 🤖 Development Assistance
 
 Special thanks to **OpenAI's GPT-5.6 Sol** for development assistance, technical research, brainstorming, architecture design and support throughout the creation of Solar Launcher.
 
@@ -673,7 +980,7 @@ The name **Solar Launcher** is a reference to **GPT-5.6 Sol**, as a small tribut
 
 ---
 
-### 🛠️ Wii U Homebrew Community
+## 🛠️ Wii U Homebrew Community
 
 Solar Launcher builds upon years of work from the Wii U homebrew community.
 
@@ -689,39 +996,21 @@ Special thanks to the developers and contributors behind projects and tools such
 - **SDCafiine**
 - **FTPiiU Everywhere**
 
-Their work makes projects like Solar Launcher possible and continues to expand what the Wii U can do.
+Their work makes projects like Solar Launcher possible.
 
 ---
 
-### 🎮 Cuphead Wii U
+## 🎮 Cuphead Wii U
 
-Special thanks to **The Latte Team** for their work on the Wii U port of **Cuphead**, which is planned to serve as one of Solar Launcher's first advanced modding test cases.
+Special thanks to **The Latte Team** for their work on the Wii U port of **Cuphead**, planned as one of Solar Launcher's first advanced modding test cases.
 
-The Cuphead 3–4 player project is intended as a community modification and is separate from the original Wii U port.
+The Cuphead multiplayer mod is intended as a separate community modification.
 
 **Cuphead**, its characters, artwork and related intellectual property belong to **Studio MDHR** and their respective rights holders.
 
 ---
 
-### 💙 Community
-
-Thanks to everyone who contributes:
-
-- code
-- documentation
-- testing
-- mods
-- game research
-- bug reports
-- suggestions
-- tools
-- tutorials
-
-Solar Launcher is intended to grow together with the Wii U modding and homebrew community.
-
----
-
-## ⚠️ Disclaimer
+# ⚠️ Disclaimer
 
 Solar Launcher is an unofficial homebrew project.
 
@@ -735,7 +1024,7 @@ It is not affiliated with or endorsed by:
 
 Users should provide their own legally obtained games and game files.
 
-Solar Launcher does not aim to distribute copyrighted game assets.
+Solar Launcher does not aim to distribute copyrighted game assets or game executables.
 
 Game names and trademarks belong to their respective owners.
 

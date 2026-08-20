@@ -26,6 +26,7 @@ uint32_t gInterestingClassCount = 0;
 
 bool gRuntimeMetadataValidated = false;
 bool gRuntimeMetadataRejected = false;
+bool gCompileHookActiveLogged = false;
 void *gObservedMethods[96] = {};
 uint32_t gObservedMethodCount = 0;
 
@@ -144,7 +145,13 @@ void TraceCompiledMethod(void *method, void *compiledCode) {
 
 void *my_mono_compile_method(void *method) {
     if (real_mono_compile_method == nullptr) {
+        Logger::Error("Mono Bridge: compile hook invoked without a valid trampoline");
         return nullptr;
+    }
+
+    if (!gCompileHookActiveLogged) {
+        gCompileHookActiveLogged = true;
+        Logger::Info("Mono Bridge: compile hook ACTIVE (first invocation)");
     }
 
     void *compiledCode = real_mono_compile_method(method);
@@ -190,6 +197,7 @@ void ResetObservations() {
     gObservedMethodCount = 0;
     gRuntimeMetadataValidated = false;
     gRuntimeMetadataRejected = false;
+    gCompileHookActiveLogged = false;
     gRuntimeProfile = nullptr;
     gInterestingClasses = nullptr;
     gInterestingClassCount = 0;

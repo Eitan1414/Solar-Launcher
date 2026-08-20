@@ -66,6 +66,16 @@ ApplyResult Apply(const std::string &id, PatchedFunctionHandle *outHandle, bool 
         return ApplyResult::Failed;
     }
 
+    bool currentlyPatched = false;
+    const FunctionPatcherStatus queryStatus = FunctionPatcher_IsFunctionPatched(handle, &currentlyPatched);
+    if (queryStatus == FUNCTION_PATCHER_RESULT_SUCCESS) {
+        Logger::Info("Native hook %s REGISTERED: %s",
+                     id.c_str(), currentlyPatched ? "ACTIVE" : "WAITING");
+    } else {
+        Logger::Warn("Native hook %s registered but state query failed: %s (%d)",
+                     id.c_str(), FunctionPatcher_GetStatusStr(queryStatus), queryStatus);
+    }
+
     if (outHandle != nullptr) {
         *outHandle = handle;
     }

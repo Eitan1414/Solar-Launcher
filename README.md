@@ -670,6 +670,7 @@ Special thanks to **OpenAI's GPT-5.6 Sol** for development assistance, technical
 The name **Solar Launcher** is a reference to **GPT-5.6 Sol**, as a small tribute for its help across this project and other Wii U development projects.
 
 > Solar Launcher is an independent community project and is not officially affiliated with or endorsed by OpenAI.
+(yep I'm using IA and what I need some moral and development help anyway I know that all of you already do a lot of crazy stuff with IA so don't blame me)
 
 ---
 

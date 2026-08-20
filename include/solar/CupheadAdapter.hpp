@@ -1,0 +1,16 @@
+#pragma once
+
+#include <cstdint>
+
+namespace Solar::CupheadAdapter {
+
+constexpr uint64_t TitleId = 0x0005000021000000ULL;
+constexpr uint16_t SupportedVersion = 0;
+constexpr int PlayerThreeId = 2;
+constexpr const char *ExecutableName = "Unity-master.rpx";
+constexpr const char *MonoTraceHookId = "cuphead.mono.compileTrace";
+
+bool Supports(uint64_t titleId);
+bool RegisterHooks();
+
+} // namespace Solar::CupheadAdapter

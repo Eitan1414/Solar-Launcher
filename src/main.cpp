@@ -1,4 +1,5 @@
 #include "solar/ConflictDetector.hpp"
+#include "solar/GameAdapterRegistry.hpp"
 #include "solar/Logger.hpp"
 #include "solar/ModManager.hpp"
 #include "solar/ModMenu.hpp"
@@ -14,7 +15,7 @@
 
 WUPS_PLUGIN_NAME("Solar Launcher");
 WUPS_PLUGIN_DESCRIPTION("Universal Wii U modding framework for Aroma.");
-WUPS_PLUGIN_VERSION("v0.4.0-dev");
+WUPS_PLUGIN_VERSION("v0.5.0-dev");
 WUPS_PLUGIN_AUTHOR("Eitan1414");
 WUPS_PLUGIN_LICENSE("Unlicensed");
 
@@ -139,13 +140,14 @@ INITIALIZE_PLUGIN() {
 
     Solar::RedirectEngine::Initialize();
     Solar::PatchEngine::Initialize();
-    Solar::Logger::Info("Solar Launcher v0.4 initialized");
+    Solar::Logger::Info("Solar Launcher v0.5 initialized");
 }
 
 DEINITIALIZE_PLUGIN() {
+    Solar::GameAdapterRegistry::Reset();
     Solar::PatchEngine::Shutdown();
     Solar::RedirectEngine::Shutdown();
-    Solar::Logger::Info("Solar Launcher v0.4 deinitialized");
+    Solar::Logger::Info("Solar Launcher v0.5 deinitialized");
 }
 
 ON_APPLICATION_START() {
@@ -154,6 +156,7 @@ ON_APPLICATION_START() {
 
     Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
+    Solar::GameAdapterRegistry::Reset();
 
     if (!Solar::TitleManager::IsGameTitle(titleId)) {
         Solar::Logger::Info("Ignoring non-game title %s", titleIdText.c_str());
@@ -174,6 +177,8 @@ ON_APPLICATION_START() {
         Solar::Logger::Error("Could not initialize mod directory for title %s", titleIdText.c_str());
         return;
     }
+
+    Solar::GameAdapterRegistry::PrepareForTitle(titleId);
 
     auto mods = Solar::ModManager::ScanForTitle(titleId, gLegacySDCafiineEnabled);
     Solar::SelectionStore::Load(titleId, mods);
@@ -225,4 +230,5 @@ ON_APPLICATION_START() {
 ON_APPLICATION_ENDS() {
     Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
+    Solar::GameAdapterRegistry::Reset();
 }

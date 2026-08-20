@@ -1,0 +1,9 @@
+{
+  "name": "Cuphead 3 Player - Mono Trace Test",
+  "author": "Pixel Plugins Studios / Eitan1414",
+  "version": "0.5.0-test1",
+  "titleId": "0005000021000000",
+  "type": "patch",
+  "enabled": true,
+  "priority": 500
+}

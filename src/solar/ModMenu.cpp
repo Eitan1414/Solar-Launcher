@@ -34,17 +34,21 @@ constexpr int PanelDividerColumn = 41;
 constexpr int HeaderBottomRow = 10;
 constexpr int ContentBottomRow = 21;
 
+// Compact Wii U OSScreen rendition of the real Solar Launcher branding.
+// The whole header is pure monochrome text on black. The sun, inner lightning/L
+// and title are built from ASCII plus binary digits so it keeps the generated
+// terminal-art look while fitting both the TV and GamePad built-in font.
 constexpr const char *BinaryLogo[] = {
-    "       1  |  0",
-    "    0    \\|/    1",
-    "  10  .-------.  01",
-    "-----/ 0011000 \\-----",
-    "    | 0011000 |",
-    "1---| 0011110 |---0",
-    "    | 0000110 |",
-    "-----\\ 0000100 /-----",
-    "  01  '-------'  10",
-    "    1    /|\\    0",
+    "       1        0      ",
+    "    01 111 10          ",
+    "  10  .-----.  01      111 000 1    0  11    0    1  0 0 1 1 000 1 1 000 11",
+    "1----/   111  \\----0   1   0 0 1   0 0 1 1   0   1 1 0 0 111 0   1 1 0   1 1",
+    "     |   1     |        111 0 0 1   000 11    0   111 0 0 111 0   111 00  11",
+    "0----|   1 11  |----1    1 0 0 1   0 0 1 1   0   1 1 0 0 111 0   1 1 0   1 1",
+    "     |   1110  |        111 000 111 0 0 1 1   000 1 1 000 1 1 000 1 1 000 1 1",
+    "1----\\     10 /----0   0101  Universal Wii U modding framework  1010",
+    "  01  '-----'  10            Load. Combine. Expand.",
+    "     0   /1\\   1             v0.5  |  Cuphead Test 1B",
 };
 constexpr size_t BinaryLogoLineCount = sizeof(BinaryLogo) / sizeof(BinaryLogo[0]);
 
@@ -181,15 +185,6 @@ void RenderHeader(size_t visibleLogoLines = BinaryLogoLineCount) {
     const size_t count = std::min(visibleLogoLines, BinaryLogoLineCount);
     for (size_t row = 0; row < count; ++row) {
         PrintBoth(1, static_cast<int>(row), "%s", BinaryLogo[row]);
-    }
-
-    if (visibleLogoLines >= 3) {
-        PrintBoth(29, 2, "SOLAR LAUNCHER");
-        PrintBoth(29, 3, "Universal Wii U modding framework");
-    }
-    if (visibleLogoLines >= 6) {
-        PrintBoth(29, 5, "Load. Combine. Expand.");
-        PrintBoth(29, 6, "v0.5 - Game Adapter build");
     }
 }
 

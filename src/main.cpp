@@ -43,22 +43,24 @@ bool gPatchModsEnabled = DefaultPatchModsEnabled;
 bool gLegacySDCafiineEnabled = DefaultLegacySDCafiineEnabled;
 bool gPreLaunchMenuEnabled = DefaultPreLaunchMenuEnabled;
 
-// Some games can cause WUPS to report another application-start callback while
-// the same title is still running in the same process. Solar must treat that as
-// a scene/application transition, not as a fresh launch. Otherwise native hooks
-// are removed and re-added (and the pre-launch menu is shown again).
-bool gSessionActive = false;
-uint64_t gSessionTitleId = 0;
-uint32_t gSessionUpid = 0;
+// Keep the pre-launch menu lifetime separate from the runtime-hook lifetime.
+// Cuphead can tear down/recreate application/runtime state when restarting a boss
+// or returning to the map. Those transitions may produce new WUPS application
+// callbacks, but they are still part of the same user-visible Cuphead launch.
+bool gMenuSessionActive = false;
+uint64_t gMenuSessionTitleId = 0;
+uint32_t gLastSessionUpid = 0;
+bool gSessionVanilla = false;
 
-void ResetSessionState() {
-    gSessionActive = false;
-    gSessionTitleId = 0;
-    gSessionUpid = 0;
+void ResetMenuSessionState() {
+    gMenuSessionActive = false;
+    gMenuSessionTitleId = 0;
+    gLastSessionUpid = 0;
+    gSessionVanilla = false;
 }
 
-bool IsSameActiveSession(uint64_t titleId, uint32_t upid) {
-    return gSessionActive && gSessionTitleId == titleId && gSessionUpid == upid;
+bool IsSameMenuSession(uint64_t titleId) {
+    return gMenuSessionActive && gMenuSessionTitleId == titleId;
 }
 
 void StoreBool(const char *key, bool value) {
@@ -177,7 +179,7 @@ DEINITIALIZE_PLUGIN() {
     Solar::PatchEngine::Shutdown();
     Solar::RedirectEngine::Shutdown();
     Solar::GameAdapterRegistry::Reset();
-    ResetSessionState();
+    ResetMenuSessionState();
     Solar::Logger::Info("Solar Launcher v0.5 deinitialized");
 }
 
@@ -185,20 +187,20 @@ ON_APPLICATION_START() {
     const uint64_t titleId = Solar::TitleManager::CurrentTitleId();
     const std::string titleIdText = Solar::TitleManager::FormatTitleId(titleId);
     const uint32_t upid = OSGetUPID();
+    const bool sameMenuSession = IsSameMenuSession(titleId);
 
-    if (IsSameActiveSession(titleId, upid)) {
-        Solar::Logger::Info("Duplicate application-start for title %s (UPID %u); preserving active Solar session",
-                            titleIdText.c_str(), static_cast<unsigned int>(upid));
-        return;
-    }
-
-    // This is a genuinely new title/process (or stale state from a previous one).
+    // Runtime state belongs to the current application process and must be rebuilt
+    // after a Cuphead scene/process reload. The menu session intentionally survives.
     Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
     Solar::GameAdapterRegistry::Reset();
-    ResetSessionState();
 
     if (!Solar::TitleManager::IsGameTitle(titleId)) {
+        if (gMenuSessionActive) {
+            Solar::Logger::Info("Left game title %s; resetting Solar pre-launch session",
+                                Solar::TitleManager::FormatTitleId(gMenuSessionTitleId).c_str());
+            ResetMenuSessionState();
+        }
         Solar::Logger::Info("Ignoring non-game title %s", titleIdText.c_str());
         return;
     }
@@ -226,17 +228,28 @@ ON_APPLICATION_START() {
     Solar::Logger::Info("Detected title %s with %u compatible mod(s)",
                         titleIdText.c_str(), static_cast<unsigned int>(mods.size()));
 
-    // Mark the session before opening the menu. Even if drawing/input fails or
-    // the user launches vanilla, callbacks from the same process must not reopen
-    // Solar or destroy its runtime state.
-    gSessionActive = true;
-    gSessionTitleId = titleId;
-    gSessionUpid = upid;
+    if (!sameMenuSession) {
+        gMenuSessionActive = true;
+        gMenuSessionTitleId = titleId;
+        gLastSessionUpid = upid;
+        gSessionVanilla = false;
+    } else {
+        Solar::Logger::Info("Runtime reload for title %s (UPID %u -> %u); skipping pre-launch menu",
+                            titleIdText.c_str(), static_cast<unsigned int>(gLastSessionUpid),
+                            static_cast<unsigned int>(upid));
+        gLastSessionUpid = upid;
+    }
 
-    if (gPreLaunchMenuEnabled && !mods.empty()) {
+    if (gSessionVanilla) {
+        Solar::Logger::Info("Preserving vanilla launch across runtime reload for title %s", titleIdText.c_str());
+        return;
+    }
+
+    if (!sameMenuSession && gPreLaunchMenuEnabled && !mods.empty()) {
         const Solar::MenuResult menu = Solar::ModMenu::Show(titleId, mods);
         if (menu.action == Solar::MenuAction::LaunchVanilla) {
-            Solar::Logger::Info("User selected vanilla launch");
+            gSessionVanilla = true;
+            Solar::Logger::Info("User selected vanilla launch for this title session");
             return;
         }
 
@@ -275,8 +288,10 @@ ON_APPLICATION_START() {
 }
 
 ON_APPLICATION_ENDS() {
+    // Application-end can occur during Cuphead's internal reload path. Clean only
+    // process-bound runtime state here; keep the menu session until another title starts.
     Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
     Solar::GameAdapterRegistry::Reset();
-    ResetSessionState();
+    Solar::Logger::Info("Application-end callback received; preserving Solar pre-launch session");
 }

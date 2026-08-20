@@ -43,12 +43,23 @@ bool gPatchModsEnabled = DefaultPatchModsEnabled;
 bool gLegacySDCafiineEnabled = DefaultLegacySDCafiineEnabled;
 bool gPreLaunchMenuEnabled = DefaultPreLaunchMenuEnabled;
 
-// WUPS may report another application-start event while a game is still in the
-// same process. Keep the pre-launch selector strictly once per title/process so
-// returning to a Cuphead map cannot reopen Solar after a level or boss.
-bool gMenuShownForProcess = false;
-uint64_t gMenuShownTitleId = 0;
-uint32_t gMenuShownUpid = 0;
+// Some games can cause WUPS to report another application-start callback while
+// the same title is still running in the same process. Solar must treat that as
+// a scene/application transition, not as a fresh launch. Otherwise native hooks
+// are removed and re-added (and the pre-launch menu is shown again).
+bool gSessionActive = false;
+uint64_t gSessionTitleId = 0;
+uint32_t gSessionUpid = 0;
+
+void ResetSessionState() {
+    gSessionActive = false;
+    gSessionTitleId = 0;
+    gSessionUpid = 0;
+}
+
+bool IsSameActiveSession(uint64_t titleId, uint32_t upid) {
+    return gSessionActive && gSessionTitleId == titleId && gSessionUpid == upid;
+}
 
 void StoreBool(const char *key, bool value) {
     if (WUPSStorageAPI_StoreBool(nullptr, key, value) != WUPS_STORAGE_ERROR_SUCCESS) {
@@ -152,12 +163,11 @@ INITIALIZE_PLUGIN() {
 }
 
 DEINITIALIZE_PLUGIN() {
-    gMenuShownForProcess = false;
-    gMenuShownTitleId = 0;
-    gMenuShownUpid = 0;
-    Solar::GameAdapterRegistry::Reset();
+    // Native hooks must be removed before adapter registrations are discarded.
     Solar::PatchEngine::Shutdown();
     Solar::RedirectEngine::Shutdown();
+    Solar::GameAdapterRegistry::Reset();
+    ResetSessionState();
     Solar::Logger::Info("Solar Launcher v0.5 deinitialized");
 }
 
@@ -166,9 +176,17 @@ ON_APPLICATION_START() {
     const std::string titleIdText = Solar::TitleManager::FormatTitleId(titleId);
     const uint32_t upid = OSGetUPID();
 
+    if (IsSameActiveSession(titleId, upid)) {
+        Solar::Logger::Info("Duplicate application-start for title %s (UPID %u); preserving active Solar session",
+                            titleIdText.c_str(), static_cast<unsigned int>(upid));
+        return;
+    }
+
+    // This is a genuinely new title/process (or stale state from a previous one).
     Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
     Solar::GameAdapterRegistry::Reset();
+    ResetSessionState();
 
     if (!Solar::TitleManager::IsGameTitle(titleId)) {
         Solar::Logger::Info("Ignoring non-game title %s", titleIdText.c_str());
@@ -198,17 +216,14 @@ ON_APPLICATION_START() {
     Solar::Logger::Info("Detected title %s with %u compatible mod(s)",
                         titleIdText.c_str(), static_cast<unsigned int>(mods.size()));
 
-    const bool menuAlreadyShown = gMenuShownForProcess &&
-                                  gMenuShownTitleId == titleId &&
-                                  gMenuShownUpid == upid;
+    // Mark the session before opening the menu. Even if drawing/input fails or
+    // the user launches vanilla, callbacks from the same process must not reopen
+    // Solar or destroy its runtime state.
+    gSessionActive = true;
+    gSessionTitleId = titleId;
+    gSessionUpid = upid;
 
-    if (gPreLaunchMenuEnabled && !mods.empty() && !menuAlreadyShown) {
-        // Mark it before drawing. Even if drawing/input later fails, Solar must
-        // not trap the player in a selector loop during the same game process.
-        gMenuShownForProcess = true;
-        gMenuShownTitleId = titleId;
-        gMenuShownUpid = upid;
-
+    if (gPreLaunchMenuEnabled && !mods.empty()) {
         const Solar::MenuResult menu = Solar::ModMenu::Show(titleId, mods);
         if (menu.action == Solar::MenuAction::LaunchVanilla) {
             Solar::Logger::Info("User selected vanilla launch");
@@ -218,9 +233,6 @@ ON_APPLICATION_START() {
         if (menu.action == Solar::MenuAction::Failed) {
             Solar::Logger::Warn("Pre-launch menu failed; continuing with saved/default selections");
         }
-    } else if (menuAlreadyShown) {
-        Solar::Logger::Info("Skipping duplicate pre-launch menu for title %s (UPID %u)",
-                            titleIdText.c_str(), static_cast<unsigned int>(upid));
     }
 
     if (gFileModsEnabled) {
@@ -242,7 +254,7 @@ ON_APPLICATION_START() {
 
     if (gPatchModsEnabled) {
         const Solar::PatchApplyReport patchReport = Solar::PatchEngine::Apply(titleId, mods);
-        Solar::Logger::Info("Patch summary: memory %u/%u applied, hooks %u/%u applied",
+        Solar::Logger::Info("Patch summary: memory %u/%u applied, hooks %u/%u registered",
                             static_cast<unsigned int>(patchReport.memoryPatchesApplied),
                             static_cast<unsigned int>(patchReport.memoryPatchesFound),
                             static_cast<unsigned int>(patchReport.hooksApplied),
@@ -256,4 +268,5 @@ ON_APPLICATION_ENDS() {
     Solar::PatchEngine::Clear();
     Solar::RedirectEngine::Clear();
     Solar::GameAdapterRegistry::Reset();
+    ResetSessionState();
 }

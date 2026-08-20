@@ -1,6 +1,6 @@
-# Solar Launcher mod format (draft v0.2)
+# Solar Launcher mod format (draft v0.4)
 
-Solar V0.2 discovers mods by the currently running Wii U **Title ID** and can apply file replacement layers through Aroma's ContentRedirectionModule.
+Solar V0.4 discovers mods by the currently running Wii U **Title ID** and can combine file replacement layers with memory/native patch payloads.
 
 ## Folder layout
 
@@ -16,9 +16,12 @@ SD:/wiiu/SolarLauncher/
             └── addons/
 ```
 
-`content/` is merged into `/vol/content` and `aoc/` is merged into `/vol/aoc`.
+- `content/` is merged into `/vol/content`.
+- `aoc/` is merged into `/vol/aoc`.
+- `patches/` contains Solar V0.4 declarative patch files (`*.json`).
+- `addons/` remains reserved for a later Solar Addon/Game API version.
 
-`patches/` and `addons/` are reserved for later Solar versions.
+A mod may contain only one payload type or combine several of them.
 
 ## `mod.json`
 
@@ -28,7 +31,7 @@ SD:/wiiu/SolarLauncher/
   "author": "Example Author",
   "version": "1.0.0",
   "titleId": "00050000XXXXXXXX",
-  "type": "replacement",
+  "type": "total_mod",
   "enabled": true,
   "priority": 100
 }
@@ -40,31 +43,53 @@ SD:/wiiu/SolarLauncher/
 - `author` — mod author.
 - `version` — mod version.
 - `titleId` — 16-digit Wii U Title ID. When present, Solar checks it against the running title.
-- `type` — metadata describing the mod. Planned values include `replacement`, `patch`, `addon`, and `total_mod`.
-- `enabled` — whether the mod should be applied automatically. Defaults to `true`.
-- `priority` — layer priority. Higher values override lower values when two mods provide the same file. Defaults to `0`.
+- `type` — metadata describing the mod. Suggested values: `replacement`, `patch`, `addon`, `total_mod`.
+- `enabled` — default enabled state. Defaults to `true`.
+- `priority` — mod priority. Defaults to `0`.
 
-## Layer priority
+The V0.3/V0.4 pre-launch menu can override `enabled` and `priority` per game without modifying `mod.json`.
 
-Solar adds lower-priority layers first and higher-priority layers last because ContentRedirection processes layers in reverse adding order.
+## File layer priority
 
-Example:
+Solar adds lower-priority file layers first and higher-priority layers last because ContentRedirection processes layers in reverse adding order.
 
 ```text
 Base game
    ↓
-Priority 0  - HD Texture Pack
+Priority 0   - HD Texture Pack
    ↓
-Priority 50 - Custom Music
+Priority 50  - Custom Music
    ↓
 Priority 100 - Custom Character
 ```
 
-If both priority `0` and priority `100` provide the same file, priority `100` wins.
+If priority `0` and priority `100` provide the same file, priority `100` wins.
+
+## Patch priority
+
+V0.4 also uses mod priority for overlapping memory patches.
+
+Solar evaluates higher-priority memory patches first. If a lower-priority patch overlaps a range already claimed by a higher-priority patch, the lower-priority patch is skipped and logged.
+
+Patch files live directly inside:
+
+```text
+MyMod/patches/*.json
+```
+
+See [`V0.4_PATCH_ENGINE.md`](V0.4_PATCH_ENGINE.md) for the complete patch format and safety rules.
+
+## Native hooks
+
+Patch files can request named native hooks. A hook only works if a compiled Solar Game Adapter registered the requested ID with `NativeHookRegistry`.
+
+Solar does not execute arbitrary native binaries from a mod folder.
+
+This is the mechanism intended for complex future mods such as the Cuphead 3-player test, after the exact Wii U RPX has been analyzed.
 
 ## SDCafiine compatibility
 
-Solar V0.2 also scans the standard Aroma SDCafiine location:
+Solar also scans the standard Aroma SDCafiine location:
 
 ```text
 SD:/wiiu/sdcafiine/
@@ -74,15 +99,11 @@ SD:/wiiu/sdcafiine/
         └── aoc/
 ```
 
-If exactly one compatible legacy SDCafiine pack exists for the running title, Solar V0.2 auto-enables it with a low priority so native Solar mods can override it.
-
-If multiple legacy SDCafiine packs exist, Solar detects them but leaves them disabled because V0.2 does not yet include the pre-launch pack selector. This avoids choosing an arbitrary pack.
+Legacy SDCafiine packs are file-replacement payloads only. They do not gain `patches/` support unless converted into a native Solar mod folder with a `mod.json`.
 
 ## File deletion marker
 
-ContentRedirection merge layers support the same deletion marker used by the underlying module. To hide an original game file, place an empty file prefixed with `.deleted_` in the corresponding directory of the mod layer.
-
-Example:
+ContentRedirection merge layers support the underlying deletion marker. To hide an original game file, place an empty file prefixed with `.deleted_` in the corresponding layer directory.
 
 ```text
 content/music/.deleted_track1.wav

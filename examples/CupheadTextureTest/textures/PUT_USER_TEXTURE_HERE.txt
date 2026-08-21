@@ -1,0 +1,6 @@
+Place a legally extracted and visibly modified Cuphead content file here, preserving its exact path relative to /vol/content.
+
+Example only:
+textures/<original/subfolders>/<replacement-file>
+
+Delete this placeholder before hardware testing.

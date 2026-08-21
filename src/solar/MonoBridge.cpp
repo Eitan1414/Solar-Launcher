@@ -21,6 +21,7 @@ using MonoClassGetNamespaceFn = const char *(*)(void *klass);
 
 MonoCompileMethodFn real_mono_compile_method __attribute__((section(".data"))) = nullptr;
 
+RuntimeMetadataProfile gResolvedRuntimeProfile {};
 const RuntimeMetadataProfile *gRuntimeProfile = nullptr;
 const char *const *gInterestingClasses = nullptr;
 uint32_t gInterestingClassCount = 0;
@@ -44,14 +45,35 @@ bool BytesMatch(uint32_t address, const uint8_t *expected, uint32_t size) {
     return std::memcmp(reinterpret_cast<const void *>(static_cast<uintptr_t>(address)), expected, size) == 0;
 }
 
-void LogLoadedModules(const char *expectedExecutable) {
+bool EndsWith(const char *value, const char *suffix) {
+    if (value == nullptr || suffix == nullptr) {
+        return false;
+    }
+    const size_t valueLength = std::strlen(value);
+    const size_t suffixLength = std::strlen(suffix);
+    if (suffixLength > valueLength) {
+        return false;
+    }
+    return std::memcmp(value + valueLength - suffixLength, suffix, suffixLength) == 0;
+}
+
+bool AddSignedDelta(uint32_t address, int32_t delta, uint32_t &outAddress) {
+    const int64_t resolved = static_cast<int64_t>(address) + static_cast<int64_t>(delta);
+    if (resolved <= 0 || resolved > UINT32_MAX) {
+        return false;
+    }
+    outAddress = static_cast<uint32_t>(resolved);
+    return true;
+}
+
+bool FindLoadedExecutable(const char *expectedExecutable, OSDynLoad_NotifyData &outModule) {
     const int moduleCount = OSDynLoad_GetNumberOfRPLs();
     Logger::Info("Mono Bridge diagnostic: loaded module count=%d expected=%s",
                  moduleCount, expectedExecutable != nullptr ? expectedExecutable : "?");
 
     if (moduleCount <= 0) {
         Logger::Warn("Mono Bridge diagnostic: no loaded RPX/RPL modules were reported");
-        return;
+        return false;
     }
 
     constexpr int MaxModulesToLog = 32;
@@ -60,20 +82,116 @@ void LogLoadedModules(const char *expectedExecutable) {
 
     if (!OSDynLoad_GetRPLInfo(0, toRead, modules)) {
         Logger::Warn("Mono Bridge diagnostic: OSDynLoad_GetRPLInfo failed");
-        return;
+        return false;
     }
 
+    bool found = false;
     for (int index = 0; index < toRead; ++index) {
-        Logger::Info("Mono Bridge diagnostic: module[%d]=%s text=%08X",
+        Logger::Info("Mono Bridge diagnostic: module[%d]=%s text=%08X textOffset=%08X textSize=%08X",
                      index,
-                     modules[index].name,
-                     static_cast<unsigned int>(modules[index].textAddr));
+                     modules[index].name != nullptr ? modules[index].name : "?",
+                     static_cast<unsigned int>(modules[index].textAddr),
+                     static_cast<unsigned int>(modules[index].textOffset),
+                     static_cast<unsigned int>(modules[index].textSize));
+
+        if (!found && EndsWith(modules[index].name, expectedExecutable)) {
+            outModule = modules[index];
+            found = true;
+        }
     }
 
     if (moduleCount > MaxModulesToLog) {
         Logger::Info("Mono Bridge diagnostic: %d additional module(s) omitted",
                      moduleCount - MaxModulesToLog);
     }
+
+    if (!found) {
+        Logger::Warn("Mono Bridge diagnostic: executable %s was not found in loaded modules",
+                     expectedExecutable != nullptr ? expectedExecutable : "?");
+    }
+    return found;
+}
+
+bool ResolveCompileMethod(const CompileHookTarget &target,
+                          const OSDynLoad_NotifyData &module,
+                          uint32_t &outTextOffset,
+                          int32_t &outRuntimeDelta) {
+    if (target.compileMethodAddress < target.linkedTextBase) {
+        Logger::Warn("Mono Bridge: invalid linked compile method/base relationship");
+        return false;
+    }
+
+    const uint32_t linkedOffset = target.compileMethodAddress - target.linkedTextBase;
+    if (module.textAddr > UINT32_MAX - linkedOffset) {
+        Logger::Warn("Mono Bridge: compile method prediction overflow");
+        return false;
+    }
+
+    const uint32_t predicted = module.textAddr + linkedOffset;
+    constexpr int32_t SearchRadius = 0x80;
+
+    uint32_t foundAddress = 0;
+    for (int32_t adjustment = -SearchRadius; adjustment <= SearchRadius; adjustment += 4) {
+        const int64_t candidate64 = static_cast<int64_t>(predicted) + adjustment;
+        if (candidate64 <= 0 || candidate64 > UINT32_MAX) {
+            continue;
+        }
+
+        const uint32_t candidate = static_cast<uint32_t>(candidate64);
+        if (candidate < module.textAddr) {
+            continue;
+        }
+        const uint32_t candidateOffset = candidate - module.textAddr;
+        if (module.textSize != 0 &&
+            (candidateOffset >= module.textSize ||
+             target.compileMethodBytesSize > module.textSize - candidateOffset)) {
+            continue;
+        }
+
+        if (BytesMatch(candidate, target.compileMethodBytes, target.compileMethodBytesSize)) {
+            foundAddress = candidate;
+            break;
+        }
+    }
+
+    if (foundAddress == 0) {
+        Logger::Warn("Mono Bridge: mono_compile_method signature not found near predicted runtime address %08X",
+                     static_cast<unsigned int>(predicted));
+        return false;
+    }
+
+    const int64_t delta64 = static_cast<int64_t>(foundAddress) -
+                            static_cast<int64_t>(target.compileMethodAddress);
+    if (delta64 < INT32_MIN || delta64 > INT32_MAX) {
+        Logger::Warn("Mono Bridge: resolved runtime delta is out of range");
+        return false;
+    }
+
+    outTextOffset = foundAddress - module.textAddr;
+    outRuntimeDelta = static_cast<int32_t>(delta64);
+
+    Logger::Info("Mono Bridge: mono_compile_method VERIFIED linked=%08X runtime=%08X textBase=%08X textOffset=%08X delta=%d",
+                 static_cast<unsigned int>(target.compileMethodAddress),
+                 static_cast<unsigned int>(foundAddress),
+                 static_cast<unsigned int>(module.textAddr),
+                 static_cast<unsigned int>(outTextOffset),
+                 static_cast<int>(outRuntimeDelta));
+    return true;
+}
+
+bool ResolveRuntimeMetadataProfile(const RuntimeMetadataProfile &source, int32_t delta) {
+    gResolvedRuntimeProfile = source;
+
+    if (!AddSignedDelta(source.methodGetNameAddress, delta, gResolvedRuntimeProfile.methodGetNameAddress) ||
+        !AddSignedDelta(source.methodGetClassAddress, delta, gResolvedRuntimeProfile.methodGetClassAddress) ||
+        !AddSignedDelta(source.classGetNameAddress, delta, gResolvedRuntimeProfile.classGetNameAddress) ||
+        !AddSignedDelta(source.classGetNamespaceAddress, delta, gResolvedRuntimeProfile.classGetNamespaceAddress)) {
+        Logger::Warn("Mono Bridge: failed to apply runtime delta to metadata helpers");
+        return false;
+    }
+
+    gRuntimeProfile = &gResolvedRuntimeProfile;
+    return true;
 }
 
 void LogRuntimeMetadataProbe(const RuntimeMetadataProfile &p) {
@@ -214,24 +332,36 @@ void *my_mono_compile_method(void *method) {
 bool RegisterCompileTraceHook(const std::string &hookId, const CompileHookTarget &target) {
     if (hookId.empty() || target.titleIds == nullptr || target.titleIdCount == 0 ||
         target.executableName == nullptr || target.executableName[0] == '\0' ||
+        target.linkedTextBase == 0 || target.compileMethodAddress == 0 ||
+        target.compileMethodBytes == nullptr || target.compileMethodBytesSize == 0 ||
         target.runtimeProfile == nullptr || target.interestingClasses == nullptr ||
         target.interestingClassCount == 0) {
         return false;
     }
 
-    gRuntimeProfile = target.runtimeProfile;
     gInterestingClasses = target.interestingClasses;
     gInterestingClassCount = target.interestingClassCount;
 
-    // Test 1B diagnostic: record exactly what the console sees before FunctionPatcher
-    // tries to resolve mono_compile_method. This distinguishes a module-name mismatch
-    // from a missing runtime symbol without guessing another patch address.
-    LogLoadedModules(target.executableName);
-    LogRuntimeMetadataProbe(*target.runtimeProfile);
+    OSDynLoad_NotifyData module {};
+    if (!FindLoadedExecutable(target.executableName, module)) {
+        return false;
+    }
+
+    uint32_t resolvedTextOffset = 0;
+    int32_t runtimeDelta = 0;
+    if (!ResolveCompileMethod(target, module, resolvedTextOffset, runtimeDelta)) {
+        Logger::Warn("Mono Bridge: refusing address hook because the RPX signature was not verified");
+        return false;
+    }
+
+    if (!ResolveRuntimeMetadataProfile(*target.runtimeProfile, runtimeDelta)) {
+        return false;
+    }
+    LogRuntimeMetadataProbe(*gRuntimeProfile);
 
     function_replacement_data_t data {};
     data.version = FUNCTION_REPLACEMENT_DATA_STRUCT_VERSION;
-    data.type = FUNCTION_PATCHER_REPLACE_FOR_EXECUTABLE_BY_NAME;
+    data.type = FUNCTION_PATCHER_REPLACE_FOR_EXECUTABLE_BY_ADDRESS;
     data.physicalAddr = 0;
     data.virtualAddr = 0;
     data.replaceAddr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&my_mono_compile_method));
@@ -242,11 +372,13 @@ bool RegisterCompileTraceHook(const std::string &hookId, const CompileHookTarget
     data.ReplaceInRPX.versionMin = target.versionMin;
     data.ReplaceInRPX.versionMax = target.versionMax;
     data.ReplaceInRPX.executableName = target.executableName;
-    data.ReplaceInRPX.textOffset = 0;
-    data.ReplaceInRPX.functionName = "mono_compile_method";
+    data.ReplaceInRPX.textOffset = resolvedTextOffset;
+    data.ReplaceInRPX.functionName = nullptr;
 
-    Logger::Info("Mono Bridge: registering %s for executable %s with FP_TARGET_PROCESS_ALL",
-                 hookId.c_str(), target.executableName);
+    Logger::Info("Mono Bridge: registering VERIFIED address hook %s for %s textOffset=%08X",
+                 hookId.c_str(),
+                 target.executableName,
+                 static_cast<unsigned int>(resolvedTextOffset));
 
     return NativeHookRegistry::Register(hookId, data);
 }
@@ -257,6 +389,7 @@ void ResetObservations() {
     gRuntimeMetadataValidated = false;
     gRuntimeMetadataRejected = false;
     gCompileHookActiveLogged = false;
+    gResolvedRuntimeProfile = {};
     gRuntimeProfile = nullptr;
     gInterestingClasses = nullptr;
     gInterestingClassCount = 0;

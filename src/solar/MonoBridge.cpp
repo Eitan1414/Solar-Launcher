@@ -3,6 +3,7 @@
 #include "solar/Logger.hpp"
 #include "solar/NativeHookRegistry.hpp"
 
+#include <coreinit/dynload.h>
 #include <coreinit/memorymap.h>
 #include <function_patcher/function_patching.h>
 
@@ -41,6 +42,55 @@ bool BytesMatch(uint32_t address, const uint8_t *expected, uint32_t size) {
         return false;
     }
     return std::memcmp(reinterpret_cast<const void *>(static_cast<uintptr_t>(address)), expected, size) == 0;
+}
+
+void LogLoadedModules(const char *expectedExecutable) {
+    const int moduleCount = OSDynLoad_GetNumberOfRPLs();
+    Logger::Info("Mono Bridge diagnostic: loaded module count=%d expected=%s",
+                 moduleCount, expectedExecutable != nullptr ? expectedExecutable : "?");
+
+    if (moduleCount <= 0) {
+        Logger::Warn("Mono Bridge diagnostic: no loaded RPX/RPL modules were reported");
+        return;
+    }
+
+    constexpr int MaxModulesToLog = 32;
+    OSDynLoad_NotifyData modules[MaxModulesToLog] {};
+    const int toRead = moduleCount < MaxModulesToLog ? moduleCount : MaxModulesToLog;
+
+    if (!OSDynLoad_GetRPLInfo(0, toRead, modules)) {
+        Logger::Warn("Mono Bridge diagnostic: OSDynLoad_GetRPLInfo failed");
+        return;
+    }
+
+    for (int index = 0; index < toRead; ++index) {
+        Logger::Info("Mono Bridge diagnostic: module[%d]=%s text=%08X",
+                     index,
+                     modules[index].name,
+                     static_cast<unsigned int>(modules[index].textAddr));
+    }
+
+    if (moduleCount > MaxModulesToLog) {
+        Logger::Info("Mono Bridge diagnostic: %d additional module(s) omitted",
+                     moduleCount - MaxModulesToLog);
+    }
+}
+
+void LogRuntimeMetadataProbe(const RuntimeMetadataProfile &p) {
+    const bool methodName =
+        BytesMatch(p.methodGetNameAddress, p.methodGetNameBytes, p.methodGetNameBytesSize);
+    const bool methodClass =
+        BytesMatch(p.methodGetClassAddress, p.methodGetClassBytes, p.methodGetClassBytesSize);
+    const bool className =
+        BytesMatch(p.classGetNameAddress, p.classGetNameBytes, p.classGetNameBytesSize);
+    const bool classNamespace =
+        BytesMatch(p.classGetNamespaceAddress, p.classGetNamespaceBytes, p.classGetNamespaceBytesSize);
+
+    Logger::Info("Mono Bridge diagnostic: metadata probes name=%s methodClass=%s className=%s namespace=%s",
+                 methodName ? "MATCH" : "MISS",
+                 methodClass ? "MATCH" : "MISS",
+                 className ? "MATCH" : "MISS",
+                 classNamespace ? "MATCH" : "MISS");
 }
 
 bool ValidateRuntimeMetadataHelpers() {
@@ -173,6 +223,12 @@ bool RegisterCompileTraceHook(const std::string &hookId, const CompileHookTarget
     gInterestingClasses = target.interestingClasses;
     gInterestingClassCount = target.interestingClassCount;
 
+    // Test 1B diagnostic: record exactly what the console sees before FunctionPatcher
+    // tries to resolve mono_compile_method. This distinguishes a module-name mismatch
+    // from a missing runtime symbol without guessing another patch address.
+    LogLoadedModules(target.executableName);
+    LogRuntimeMetadataProbe(*target.runtimeProfile);
+
     function_replacement_data_t data {};
     data.version = FUNCTION_REPLACEMENT_DATA_STRUCT_VERSION;
     data.type = FUNCTION_PATCHER_REPLACE_FOR_EXECUTABLE_BY_NAME;
@@ -180,8 +236,6 @@ bool RegisterCompileTraceHook(const std::string &hookId, const CompileHookTarget
     data.virtualAddr = 0;
     data.replaceAddr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&my_mono_compile_method));
     data.replaceCall = reinterpret_cast<uint32_t *>(&real_mono_compile_method);
-    // The official executable-targeting macros use FP_TARGET_PROCESS_ALL.
-    // Title ID, version and executable name still constrain this hook to Cuphead.
     data.targetProcess = FP_TARGET_PROCESS_ALL;
     data.ReplaceInRPX.targetTitleIds = target.titleIds;
     data.ReplaceInRPX.targetTitleIdsCount = target.titleIdCount;

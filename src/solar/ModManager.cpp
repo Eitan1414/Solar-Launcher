@@ -16,6 +16,7 @@ namespace {
 
 constexpr long MaxManifestSize = 64 * 1024;
 constexpr int LegacySDCafiinePriority = -1000;
+constexpr uint64_t CupheadTitleId = 0x0005000021000000ULL;
 
 bool IsDirectory(const std::string &path) {
     struct stat info {};
@@ -155,13 +156,26 @@ std::string NormalizeTitleId(std::string value) {
     return value;
 }
 
-void PopulatePayloadFlags(ModInfo &mod) {
+void PopulatePayloadFlags(ModInfo &mod, uint64_t titleId) {
     mod.hasContent = IsDirectory(mod.path + "/content");
     mod.hasAoc = IsDirectory(mod.path + "/aoc");
     mod.hasPatches = IsDirectory(mod.path + "/patches");
+
+    // Cuphead pack aliases. Pack folders mirror /vol/content so creators do not
+    // need to call every visual replacement a generic "content" mod.
+    if (titleId == CupheadTitleId && !mod.legacySDCafiine) {
+        mod.hasTexturePack =
+            IsDirectory(mod.path + "/textures") ||
+            IsDirectory(mod.path + "/texture_pack");
+        mod.hasBehaviorPack =
+            IsDirectory(mod.path + "/behavior") ||
+            IsDirectory(mod.path + "/behavior_pack");
+    }
 }
 
-ModInfo ParseManifest(const std::string &directoryName, const std::string &directoryPath,
+ModInfo ParseManifest(uint64_t titleId,
+                      const std::string &directoryName,
+                      const std::string &directoryPath,
                       const std::string &manifest) {
     ModInfo mod;
     mod.directoryName = directoryName;
@@ -185,11 +199,21 @@ ModInfo ParseManifest(const std::string &directoryName, const std::string &direc
     if (mod.version.empty()) {
         mod.version = "Unknown";
     }
+
+    PopulatePayloadFlags(mod, titleId);
+
     if (mod.type.empty()) {
-        mod.type = "unknown";
+        if (mod.hasTexturePack && mod.hasBehaviorPack) {
+            mod.type = "cuphead-pack";
+        } else if (mod.hasTexturePack) {
+            mod.type = "texture-pack";
+        } else if (mod.hasBehaviorPack) {
+            mod.type = "behavior-pack";
+        } else {
+            mod.type = "unknown";
+        }
     }
 
-    PopulatePayloadFlags(mod);
     return mod;
 }
 
@@ -226,7 +250,7 @@ void ScanSolarMods(uint64_t titleId, std::vector<ModInfo> &mods) {
             continue;
         }
 
-        ModInfo mod = ParseManifest(name, modPath, manifest);
+        ModInfo mod = ParseManifest(titleId, name, modPath, manifest);
         if (!mod.declaredTitleId.empty()) {
             const std::string declared = NormalizeTitleId(mod.declaredTitleId);
             if (declared != currentTitleId) {
@@ -234,6 +258,13 @@ void ScanSolarMods(uint64_t titleId, std::vector<ModInfo> &mods) {
                              mod.name.c_str(), declared.c_str(), currentTitleId.c_str());
                 continue;
             }
+        }
+
+        if (mod.hasTexturePack) {
+            Logger::Info("Cuphead texture pack detected: %s", mod.name.c_str());
+        }
+        if (mod.hasBehaviorPack) {
+            Logger::Info("Cuphead behavior pack detected: %s", mod.name.c_str());
         }
 
         mods.push_back(std::move(mod));
@@ -272,7 +303,7 @@ void ScanLegacySDCafiineMods(uint64_t titleId, std::vector<ModInfo> &mods) {
         mod.enabled = false;
         mod.priority = LegacySDCafiinePriority;
         mod.legacySDCafiine = true;
-        PopulatePayloadFlags(mod);
+        PopulatePayloadFlags(mod, titleId);
 
         if (!mod.hasContent && !mod.hasAoc) {
             continue;
@@ -287,7 +318,7 @@ void ScanLegacySDCafiineMods(uint64_t titleId, std::vector<ModInfo> &mods) {
         legacyMods[0].enabled = true;
         Logger::Info("Auto-enabled single SDCafiine pack: %s", legacyMods[0].name.c_str());
     } else if (legacyMods.size() > 1) {
-        Logger::Info("Detected %u SDCafiine packs; Solar v0.4 selector will let the user choose.",
+        Logger::Info("Detected %u SDCafiine packs; Solar selector will let the user choose.",
                      static_cast<unsigned int>(legacyMods.size()));
     }
 

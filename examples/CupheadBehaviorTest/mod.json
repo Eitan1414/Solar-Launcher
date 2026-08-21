@@ -1,0 +1,9 @@
+{
+  "name": "Cuphead Behavior Pack Test",
+  "author": "Solar Launcher",
+  "version": "0.1-test",
+  "titleId": "0005000021000000",
+  "type": "behavior-pack",
+  "enabled": true,
+  "priority": 600
+}

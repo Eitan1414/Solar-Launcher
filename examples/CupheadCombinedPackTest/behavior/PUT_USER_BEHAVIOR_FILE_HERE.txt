@@ -1,0 +1,2 @@
+Copy the already-proven Behavior Test replacement here at its exact path relative to /vol/content.
+Delete this placeholder before hardware testing.

@@ -25,7 +25,7 @@
 namespace Solar {
 namespace {
 
-constexpr int ItemsPerPage = 7;
+constexpr int ItemsPerPage = 5;
 constexpr int MinPriority = -1000;
 constexpr int MaxPriority = 1000;
 constexpr int PriorityStep = 10;
@@ -37,19 +37,29 @@ constexpr int TvWidth = 1280;
 constexpr int DrcWidth = 854;
 constexpr int TvTextColumns = 158;
 constexpr int DrcTextColumns = 106;
-constexpr int HeaderSeparatorY = 238;
-constexpr int FooterSeparatorY = 374;
-constexpr int ContentHeaderRow = 15;
-constexpr int ContentFirstRow = 16;
-constexpr int FooterFirstRow = 24;
 
-// Keep the reference artwork intact, but use a smaller independent scale on DRC.
+// TV layout keeps the wide two-column presentation.
+constexpr int TvHeaderSeparatorY = 238;
+constexpr int TvFooterSeparatorY = 374;
+constexpr int TvContentHeaderRow = 15;
+constexpr int TvContentFirstRow = 16;
+constexpr int TvFooterFirstRow = 24;
+constexpr int TvInfoColumn = 43;
 constexpr int TvLogoWidth = 900;
 constexpr int TvLogoHeight = (TvLogoWidth * EmbeddedLogo::Height) / EmbeddedLogo::Width;
 constexpr int TvLogoY = 0;
-constexpr int DrcLogoWidth = 680;
+
+// DRC has its own compact layout instead of shrinking the TV UI.
+constexpr int DrcHeaderSeparatorY = 180;
+constexpr int DrcFooterSeparatorY = 386;
+constexpr int DrcContentHeaderRow = 12;
+constexpr int DrcContentFirstRow = 13;
+constexpr int DrcInfoHeaderRow = 19;
+constexpr int DrcInfoFirstRow = 20;
+constexpr int DrcFooterFirstRow = 25;
+constexpr int DrcLogoWidth = 590;
 constexpr int DrcLogoHeight = (DrcLogoWidth * EmbeddedLogo::Height) / EmbeddedLogo::Width;
-constexpr int DrcLogoY = 26;
+constexpr int DrcLogoY = 8;
 
 void *gTvBuffer = nullptr;
 void *gDrcBuffer = nullptr;
@@ -94,7 +104,6 @@ size_t DecodeBase64(const char *input, uint8_t *output, size_t outputCapacity) {
                 return 0;
             }
             output[written++] = static_cast<uint8_t>((accumulator >> bits) & 0xFFu);
-
             if (bits == 0) {
                 accumulator = 0;
             } else {
@@ -161,17 +170,14 @@ void DrawLogoBitmap(OSScreenID screen,
     }
 
     const int xOrigin = std::max(0, (screenWidth - targetWidth) / 2);
-
     for (int dy = 0; dy < targetHeight; ++dy) {
         const int sy = (dy * EmbeddedLogo::Height) / targetHeight;
         const int py = yOrigin + dy;
-
         for (int dx = 0; dx < targetWidth; ++dx) {
             const int sx = (dx * EmbeddedLogo::Width) / targetWidth;
             if (!LogoPixel(sx, sy)) {
                 continue;
             }
-
             OSScreenPutPixelEx(screen,
                                static_cast<uint32_t>(xOrigin + dx),
                                static_cast<uint32_t>(py),
@@ -182,7 +188,6 @@ void DrawLogoBitmap(OSScreenID screen,
 
 uint32_t RemapWiiRemoteButtons(uint32_t buttons) {
     uint32_t out = 0;
-
     if (buttons & WPAD_BUTTON_LEFT) out |= VPAD_BUTTON_LEFT;
     if (buttons & WPAD_BUTTON_RIGHT) out |= VPAD_BUTTON_RIGHT;
     if (buttons & WPAD_BUTTON_DOWN) out |= VPAD_BUTTON_DOWN;
@@ -191,13 +196,11 @@ uint32_t RemapWiiRemoteButtons(uint32_t buttons) {
     if (buttons & WPAD_BUTTON_MINUS) out |= VPAD_BUTTON_MINUS;
     if (buttons & WPAD_BUTTON_A) out |= VPAD_BUTTON_A;
     if (buttons & WPAD_BUTTON_B) out |= VPAD_BUTTON_B;
-
     return out;
 }
 
 uint32_t RemapClassicButtons(uint32_t buttons) {
     uint32_t out = 0;
-
     if (buttons & WPAD_CLASSIC_BUTTON_LEFT) out |= VPAD_BUTTON_LEFT;
     if (buttons & WPAD_CLASSIC_BUTTON_RIGHT) out |= VPAD_BUTTON_RIGHT;
     if (buttons & WPAD_CLASSIC_BUTTON_DOWN) out |= VPAD_BUTTON_DOWN;
@@ -210,7 +213,6 @@ uint32_t RemapClassicButtons(uint32_t buttons) {
     if (buttons & WPAD_CLASSIC_BUTTON_Y) out |= VPAD_BUTTON_Y;
     if (buttons & WPAD_CLASSIC_BUTTON_L) out |= VPAD_BUTTON_L;
     if (buttons & WPAD_CLASSIC_BUTTON_R) out |= VPAD_BUTTON_R;
-
     return out;
 }
 
@@ -219,7 +221,6 @@ bool InitScreen() {
 
     const uint32_t tvSize = OSScreenGetBufferSizeEx(SCREEN_TV);
     const uint32_t drcSize = OSScreenGetBufferSizeEx(SCREEN_DRC);
-
     gTvBuffer = MEMAllocFromMappedMemoryForGX2Ex(tvSize, 0x100);
     gDrcBuffer = MEMAllocFromMappedMemoryForGX2Ex(drcSize, 0x100);
 
@@ -269,7 +270,6 @@ void PutClippedLine(OSScreenID screen, int columns, int x, int y, const char *li
 
     char clipped[192] = {};
     std::snprintf(clipped, sizeof(clipped), "%s", line);
-
     const int available = columns - x;
     if (available <= 0) {
         return;
@@ -277,20 +277,27 @@ void PutClippedLine(OSScreenID screen, int columns, int x, int y, const char *li
     if (available < static_cast<int>(sizeof(clipped))) {
         clipped[available] = '\0';
     }
-
     OSScreenPutFontEx(screen, x, y, clipped);
 }
 
-void PrintBoth(int x, int y, const char *format, ...) {
+void PrintScreen(OSScreenID screen, int columns, int x, int y, const char *format, va_list args) {
     char line[192] = {};
+    vsnprintf(line, sizeof(line), format, args);
+    PutClippedLine(screen, columns, x, y, line);
+}
 
+void PrintTV(int x, int y, const char *format, ...) {
     va_list args;
     va_start(args, format);
-    vsnprintf(line, sizeof(line), format, args);
+    PrintScreen(SCREEN_TV, TvTextColumns, x, y, format, args);
     va_end(args);
+}
 
-    PutClippedLine(SCREEN_TV, TvTextColumns, x, y, line);
-    PutClippedLine(SCREEN_DRC, DrcTextColumns, x, y, line);
+void PrintDRC(int x, int y, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    PrintScreen(SCREEN_DRC, DrcTextColumns, x, y, format, args);
+    va_end(args);
 }
 
 void DrawHorizontalLine(OSScreenID screen, int y, int width, uint32_t colour) {
@@ -300,18 +307,12 @@ void DrawHorizontalLine(OSScreenID screen, int y, int width, uint32_t colour) {
     }
 }
 
-void DrawSolarChrome() {
-    // Only two separators remain: one under the logo and one above controls.
-    DrawHorizontalLine(SCREEN_TV, HeaderSeparatorY, TvWidth, SolarOrange);
-    DrawHorizontalLine(SCREEN_DRC, HeaderSeparatorY, DrcWidth, SolarOrange);
-    DrawHorizontalLine(SCREEN_TV, FooterSeparatorY, TvWidth, SolarOrange);
-    DrawHorizontalLine(SCREEN_DRC, FooterSeparatorY, DrcWidth, SolarOrange);
-}
-
-void RenderHeader() {
+void RenderHeaders() {
     if (!EnsureLogoBitmap()) {
-        PrintBoth(2, 3, "SOLAR LAUNCHER");
-        PrintBoth(2, 4, "Universal Wii U modding framework");
+        PrintTV(2, 3, "SOLAR LAUNCHER");
+        PrintTV(2, 4, "Universal Wii U modding framework");
+        PrintDRC(2, 2, "SOLAR LAUNCHER");
+        PrintDRC(2, 3, "Universal Wii U modding framework");
         return;
     }
 
@@ -319,50 +320,87 @@ void RenderHeader() {
     DrawLogoBitmap(SCREEN_DRC, DrcWidth, DrcLogoWidth, DrcLogoHeight, DrcLogoY);
 }
 
+void RenderChrome() {
+    DrawHorizontalLine(SCREEN_TV, TvHeaderSeparatorY, TvWidth, SolarOrange);
+    DrawHorizontalLine(SCREEN_TV, TvFooterSeparatorY, TvWidth, SolarOrange);
+    DrawHorizontalLine(SCREEN_DRC, DrcHeaderSeparatorY, DrcWidth, SolarOrange);
+    DrawHorizontalLine(SCREEN_DRC, DrcFooterSeparatorY, DrcWidth, SolarOrange);
+}
+
 void RenderBootAnimation() {
     OSScreenClearBufferEx(SCREEN_TV, ScreenBlack);
     OSScreenClearBufferEx(SCREEN_DRC, ScreenBlack);
-    RenderHeader();
-
-    DrawHorizontalLine(SCREEN_TV, HeaderSeparatorY, TvWidth, SolarOrange);
-    DrawHorizontalLine(SCREEN_DRC, HeaderSeparatorY, DrcWidth, SolarOrange);
-
+    RenderHeaders();
+    DrawHorizontalLine(SCREEN_TV, TvHeaderSeparatorY, TvWidth, SolarOrange);
+    DrawHorizontalLine(SCREEN_DRC, DrcHeaderSeparatorY, DrcWidth, SolarOrange);
     OSScreenFlipBuffersEx(SCREEN_TV);
     OSScreenFlipBuffersEx(SCREEN_DRC);
     OSSleepTicks(OSMillisecondsToTicks(180));
 }
 
-void RenderDetails(uint64_t titleId,
-                   const ModInfo &mod,
-                   size_t conflictCount,
-                   bool technicalDetails) {
+void RenderTVDetails(uint64_t titleId,
+                     const ModInfo &mod,
+                     size_t conflictCount,
+                     bool technicalDetails) {
     if (!technicalDetails) {
-        PrintBoth(43, ContentHeaderRow, "MOD INFORMATION");
-        PrintBoth(43, ContentFirstRow + 0, "Name:    %-31.31s", mod.name.c_str());
-        PrintBoth(43, ContentFirstRow + 1, "Author:  %-23.23s  Ver: %.12s", mod.author.c_str(), mod.version.c_str());
-        PrintBoth(43, ContentFirstRow + 2, "Type: %-10.10s  Priority: %d", mod.type.c_str(), mod.priority);
-        PrintBoth(43, ContentFirstRow + 3, "Conflicts: %u  Payload C:%s A:%s P:%s",
-                  static_cast<unsigned int>(conflictCount),
-                  mod.hasContent ? "yes" : "no",
-                  mod.hasAoc ? "yes" : "no",
-                  mod.hasPatches ? "yes" : "no");
-        PrintBoth(43, ContentFirstRow + 4, "Source: %s", mod.legacySDCafiine ? "SDCafiine" : "Solar");
-        PrintBoth(43, ContentFirstRow + 5, "X: technical details");
+        PrintTV(TvInfoColumn, TvContentHeaderRow, "MOD INFORMATION");
+        PrintTV(TvInfoColumn, TvContentFirstRow + 0, "Name:    %-31.31s", mod.name.c_str());
+        PrintTV(TvInfoColumn, TvContentFirstRow + 1, "Author:  %-23.23s  Ver: %.12s", mod.author.c_str(), mod.version.c_str());
+        PrintTV(TvInfoColumn, TvContentFirstRow + 2, "Type: %-10.10s  Priority: %d", mod.type.c_str(), mod.priority);
+        PrintTV(TvInfoColumn, TvContentFirstRow + 3, "Conflicts: %u  Payload C:%s A:%s P:%s",
+                static_cast<unsigned int>(conflictCount),
+                mod.hasContent ? "yes" : "no",
+                mod.hasAoc ? "yes" : "no",
+                mod.hasPatches ? "yes" : "no");
+        PrintTV(TvInfoColumn, TvContentFirstRow + 4, "Source: %s", mod.legacySDCafiine ? "SDCafiine" : "Solar");
+        PrintTV(TvInfoColumn, TvContentFirstRow + 5, "X: technical details");
         return;
     }
 
-    PrintBoth(43, ContentHeaderRow, "TECHNICAL DETAILS");
-    PrintBoth(43, ContentFirstRow + 0, "Title:  %s", TitleManager::FormatTitleId(titleId).c_str());
-    PrintBoth(43, ContentFirstRow + 1, "Folder: %-30.30s", mod.directoryName.c_str());
-    PrintBoth(43, ContentFirstRow + 2, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
-    PrintBoth(43, ContentFirstRow + 3, "Current: %s P:%d | Default: %s P:%d",
-              mod.enabled ? "ON" : "OFF", mod.priority,
-              mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
-    PrintBoth(43, ContentFirstRow + 4, "content:%s  aoc:%s  patches:%s",
-              mod.hasContent ? "yes" : "no",
-              mod.hasAoc ? "yes" : "no",
-              mod.hasPatches ? "yes" : "no");
-    PrintBoth(43, ContentFirstRow + 5, "X: mod information");
+    PrintTV(TvInfoColumn, TvContentHeaderRow, "TECHNICAL DETAILS");
+    PrintTV(TvInfoColumn, TvContentFirstRow + 0, "Title:  %s", TitleManager::FormatTitleId(titleId).c_str());
+    PrintTV(TvInfoColumn, TvContentFirstRow + 1, "Folder: %-30.30s", mod.directoryName.c_str());
+    PrintTV(TvInfoColumn, TvContentFirstRow + 2, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
+    PrintTV(TvInfoColumn, TvContentFirstRow + 3, "Current: %s P:%d | Default: %s P:%d",
+            mod.enabled ? "ON" : "OFF", mod.priority,
+            mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
+    PrintTV(TvInfoColumn, TvContentFirstRow + 4, "content:%s  aoc:%s  patches:%s",
+            mod.hasContent ? "yes" : "no",
+            mod.hasAoc ? "yes" : "no",
+            mod.hasPatches ? "yes" : "no");
+    PrintTV(TvInfoColumn, TvContentFirstRow + 5, "X: mod information");
+}
+
+void RenderDRCDetails(uint64_t titleId,
+                      const ModInfo &mod,
+                      size_t conflictCount,
+                      bool technicalDetails) {
+    if (!technicalDetails) {
+        PrintDRC(1, DrcInfoHeaderRow, "SELECTED MOD");
+        PrintDRC(1, DrcInfoFirstRow + 0, "Name: %.45s", mod.name.c_str());
+        PrintDRC(1, DrcInfoFirstRow + 1, "Author: %.24s   Ver: %.14s", mod.author.c_str(), mod.version.c_str());
+        PrintDRC(1, DrcInfoFirstRow + 2, "Type: %.10s  Priority:%d  Conflicts:%u",
+                 mod.type.c_str(), mod.priority, static_cast<unsigned int>(conflictCount));
+        PrintDRC(1, DrcInfoFirstRow + 3, "Payload C:%s A:%s P:%s   Source:%s   X: details",
+                 mod.hasContent ? "yes" : "no",
+                 mod.hasAoc ? "yes" : "no",
+                 mod.hasPatches ? "yes" : "no",
+                 mod.legacySDCafiine ? "SDC" : "Solar");
+        return;
+    }
+
+    PrintDRC(1, DrcInfoHeaderRow, "TECHNICAL DETAILS");
+    PrintDRC(1, DrcInfoFirstRow + 0, "Title: %s   Folder: %.36s",
+             TitleManager::FormatTitleId(titleId).c_str(), mod.directoryName.c_str());
+    PrintDRC(1, DrcInfoFirstRow + 1, "Current:%s P:%d   Default:%s P:%d",
+             mod.enabled ? "ON" : "OFF", mod.priority,
+             mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
+    PrintDRC(1, DrcInfoFirstRow + 2, "content:%s  aoc:%s  patches:%s  Source:%s",
+             mod.hasContent ? "yes" : "no",
+             mod.hasAoc ? "yes" : "no",
+             mod.hasPatches ? "yes" : "no",
+             mod.legacySDCafiine ? "SDCafiine" : "Solar");
+    PrintDRC(1, DrcInfoFirstRow + 3, "X: mod information");
 }
 
 void Render(uint64_t titleId,
@@ -373,45 +411,63 @@ void Render(uint64_t titleId,
     OSScreenClearBufferEx(SCREEN_TV, ScreenBlack);
     OSScreenClearBufferEx(SCREEN_DRC, ScreenBlack);
 
-    RenderHeader();
-    DrawSolarChrome();
+    RenderHeaders();
+    RenderChrome();
 
     const size_t page = selected / ItemsPerPage;
     const size_t start = page * ItemsPerPage;
     const size_t end = std::min(start + static_cast<size_t>(ItemsPerPage), mods.size());
     const size_t pages = std::max<size_t>(1, (mods.size() + ItemsPerPage - 1) / ItemsPerPage);
 
-    PrintBoth(1, ContentHeaderRow, "MODS  %u installed", static_cast<unsigned int>(mods.size()));
+    PrintTV(1, TvContentHeaderRow, "MODS  %u installed", static_cast<unsigned int>(mods.size()));
+    PrintDRC(1, DrcContentHeaderRow, "MODS  %u installed   Page %u/%u",
+             static_cast<unsigned int>(mods.size()),
+             static_cast<unsigned int>(page + 1),
+             static_cast<unsigned int>(pages));
 
-    int row = ContentFirstRow;
-    for (size_t index = start; index < end; ++index, ++row) {
+    int tvRow = TvContentFirstRow;
+    int drcRow = DrcContentFirstRow;
+    for (size_t index = start; index < end; ++index, ++tvRow, ++drcRow) {
         const ModInfo &mod = mods[index];
         const size_t conflictCount = index < conflicts.perMod.size() ? conflicts.perMod[index] : 0;
 
-        PrintBoth(1, row, "%c [%s] %-25.25s",
-                  index == selected ? '>' : ' ',
-                  mod.enabled ? "ON " : "OFF",
-                  mod.name.c_str());
+        PrintTV(1, tvRow, "%c [%s] %-25.25s",
+                index == selected ? '>' : ' ',
+                mod.enabled ? "ON " : "OFF",
+                mod.name.c_str());
+        PrintDRC(1, drcRow, "%c [%s] %-52.52s",
+                 index == selected ? '>' : ' ',
+                 mod.enabled ? "ON " : "OFF",
+                 mod.name.c_str());
 
         if (conflictCount > 0) {
-            PrintBoth(34, row, "!%u", static_cast<unsigned int>(conflictCount));
+            PrintTV(34, tvRow, "!%u", static_cast<unsigned int>(conflictCount));
+            PrintDRC(62, drcRow, "!%u", static_cast<unsigned int>(conflictCount));
         } else if (mod.legacySDCafiine) {
-            PrintBoth(34, row, "SDC");
+            PrintTV(34, tvRow, "SDC");
+            PrintDRC(62, drcRow, "SDC");
         }
     }
 
     if (!mods.empty()) {
         const size_t conflictCount = selected < conflicts.perMod.size() ? conflicts.perMod[selected] : 0;
-        RenderDetails(titleId, mods[selected], conflictCount, technicalDetails);
+        RenderTVDetails(titleId, mods[selected], conflictCount, technicalDetails);
+        RenderDRCDetails(titleId, mods[selected], conflictCount, technicalDetails);
     }
 
-    PrintBoth(1, FooterFirstRow + 0, "A Toggle   X Details   L/R Priority   Y Reset");
-    PrintBoth(1, FooterFirstRow + 1, "+ Save & launch mods   B Launch vanilla once");
-    PrintBoth(1, FooterFirstRow + 2, "0101 SOLAR READY 1010 | Test1B   Page %u/%u   File conflicts: %u%s",
-              static_cast<unsigned int>(page + 1),
-              static_cast<unsigned int>(pages),
-              static_cast<unsigned int>(conflicts.conflictingPaths),
-              conflicts.truncated ? "+" : "");
+    PrintTV(1, TvFooterFirstRow + 0, "A Toggle   X Details   L/R Priority   Y Reset");
+    PrintTV(1, TvFooterFirstRow + 1, "+ Save & launch mods   B Launch vanilla once");
+    PrintTV(1, TvFooterFirstRow + 2, "0101 SOLAR READY 1010 | Test1B   Page %u/%u   File conflicts: %u%s",
+            static_cast<unsigned int>(page + 1),
+            static_cast<unsigned int>(pages),
+            static_cast<unsigned int>(conflicts.conflictingPaths),
+            conflicts.truncated ? "+" : "");
+
+    PrintDRC(1, DrcFooterFirstRow + 0, "A Toggle   X Details   L/R Priority   Y Reset");
+    PrintDRC(1, DrcFooterFirstRow + 1, "+ Save & launch mods   B Launch vanilla once");
+    PrintDRC(1, DrcFooterFirstRow + 2, "0101 SOLAR READY 1010 | Test1B   Conflicts:%u%s",
+             static_cast<unsigned int>(conflicts.conflictingPaths),
+             conflicts.truncated ? "+" : "");
 
     OSScreenFlipBuffersEx(SCREEN_TV);
     OSScreenFlipBuffersEx(SCREEN_DRC);
@@ -430,7 +486,6 @@ uint32_t PollButtons() {
     for (int channel = 0; channel < 4; ++channel) {
         KPADStatus status {};
         KPADError error;
-
         if (KPADReadEx(static_cast<KPADChan>(channel), &status, 1, &error) <= 0 ||
             error != KPAD_ERROR_OK || status.extensionType == 0xFF) {
             continue;
@@ -476,7 +531,6 @@ MenuResult ModMenu::Show(uint64_t titleId, std::vector<ModInfo> &mods) {
         }
 
         const uint32_t buttons = PollButtons();
-
         if (buttons & VPAD_BUTTON_UP) {
             selected = selected == 0 ? mods.size() - 1 : selected - 1;
             dirty = true;

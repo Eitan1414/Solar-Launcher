@@ -23,7 +23,6 @@ Example:
 ```text
 MyCupheadTexturePack/
 ├── mod.json
-├── icon.png
 └── textures/
     └── <same relative path as the target file under /vol/content>
 ```
@@ -63,7 +62,6 @@ Example:
 ```text
 MyCupheadBehaviorPack/
 ├── mod.json
-├── icon.png
 └── behavior/
     └── <same relative path as the target file under /vol/content>
 ```
@@ -77,7 +75,6 @@ A single mod may contain both payloads:
 ```text
 CupheadTotalMod/
 ├── mod.json
-├── icon.png
 ├── textures/
 ├── behavior/
 └── patches/
@@ -94,5 +91,23 @@ B = behavior pack
 A = add-on content (AOC)
 P = patches/hooks
 ```
+
+## Hardware validation templates
+
+Three asset-free templates are included in `examples/`:
+
+```text
+CupheadTextureTest/
+CupheadBehaviorTest/
+CupheadCombinedPackTest/
+```
+
+Use them in that order: first validate a single visual replacement, then a minimal behavior replacement, then both together with priorities/conflicts.
+
+Full procedure: [`CUPHEAD_PACK_TESTS.md`](CUPHEAD_PACK_TESTS.md)
+
+## Mod icons
+
+A future `icon.png` convention is planned for Solar's launcher UI. It is not part of the currently validated pack loader yet, so the examples above intentionally do not require an icon.
 
 Solar does not distribute Cuphead game assets. Pack creators and users should provide files derived from their own legally obtained game copy.

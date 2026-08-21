@@ -22,6 +22,44 @@ Solar currently combines two layers:
 1. **Universal mod loading** — file replacement, SDCafiine compatibility, priorities, saved selections, conflict detection and declarative patches.
 2. **Game Adapters** — trusted game-specific code for deeper gameplay modifications that cannot be expressed as simple file replacements.
 
+### Solar as a Cafiine / SDCafiine successor
+
+Solar Launcher is designed as a **modern, more feature-rich and more efficient alternative to Cafiine/SDCafiine** for Wii U modding under Aroma.
+
+Instead of limiting the project to file replacement, Solar expands the same basic idea into a complete modding framework with features such as:
+
+- multiple mods enabled at the same time
+- mod enable/disable from a pre-launch interface
+- configurable priorities
+- replacement-file conflict detection
+- saved per-game selections
+- one-time vanilla launch
+- AOC replacement
+- declarative memory patches
+- FunctionPatcher-based native hooks
+- game-specific adapters
+- future Texture / Behavior / addon-style systems
+- diagnostics and file-backed logs
+- future beginner-oriented compatibility tooling
+
+Solar is also intended to reduce unnecessary overhead by keeping these systems inside one integrated Aroma/WUPS framework instead of stacking multiple independent loaders. Formal performance benchmarks against Cafiine/SDCafiine are still planned, so the performance goal should not yet be interpreted as a published benchmark result.
+
+Most importantly, Solar is designed to remain **backward-compatible with existing Cafiine/SDCafiine-style file replacement mods**. Existing packs can be detected from the normal legacy SD structure and used from Solar without forcing creators to rebuild every old mod in a new format.
+
+In other words:
+
+```text
+Existing Cafiine / SDCafiine mods
+              ↓
+        Solar compatibility
+              ↓
+   old packs keep working
+              +
+ priorities / conflicts / UI / patches / adapters / new features
+```
+
+Solar-native mods can then use additional features that did not exist in the original Cafiine workflow.
+
 > ⚠️ Solar Launcher is still in active development. Do not treat current development builds as a stable release.
 
 ---
@@ -416,7 +454,9 @@ Cuphead mods can additionally use the Texture/Behavior payload folders described
 
 ---
 
-# 📦 Legacy SDCafiine compatibility
+# 📦 Legacy Cafiine / SDCafiine compatibility
+
+Solar is intentionally **backward-compatible with the legacy Cafiine/SDCafiine file-replacement ecosystem**.
 
 Solar can discover existing SDCafiine packs under:
 
@@ -424,7 +464,23 @@ Solar can discover existing SDCafiine packs under:
 SD:/wiiu/sdcafiine/<TITLE_ID>/
 ```
 
-They can be shown alongside Solar-native mods in the pre-launch selector.
+Those packs can be shown alongside Solar-native mods in the same pre-launch selector and can benefit from Solar's management layer without requiring the original mod to be rewritten as a Solar-native package.
+
+For ordinary legacy replacement packs, the intended migration path is therefore:
+
+```text
+Old Cafiine / SDCafiine pack
+          ↓
+Keep existing replacement files
+          ↓
+Solar detects the legacy pack
+          ↓
+Use it through Solar
+```
+
+Solar-native mods can additionally use features that legacy packs do not provide by themselves, including priorities, conflict handling, memory patches, trusted runtime hooks and Game Adapters.
+
+This backward compatibility is important to the project: **moving to Solar should not mean abandoning the existing Wii U mod library.**
 
 Do not run a separate standalone SDCafiine replacement system in parallel when Solar is already applying the same game's replacement layers, as both systems can compete for content redirection.
 
@@ -453,6 +509,7 @@ Current important validation work includes:
 - Player 3 creation Test 2
 - independent third-controller input later
 - long-session stability
+- formal Cafiine/SDCafiine vs Solar performance benchmarking
 
 ---
 
@@ -512,6 +569,7 @@ Simple games or file-replacement-only mods should require little code. Deep game
 - validate Cuphead Behavior Packs
 - continue Cuphead Player 3 Test 2
 - P3 spawn → input → HUD → camera → revive
+- benchmark Solar file redirection against legacy Cafiine/SDCafiine workflows
 
 ## Later
 

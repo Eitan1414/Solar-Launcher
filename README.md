@@ -456,6 +456,51 @@ Current important validation work includes:
 
 ---
 
+# 🧰 Planned Game Compatibility Kit
+
+A future **Solar Game Compatibility Kit** is planned to make adding support for new Wii U games much easier, including for people with little coding experience.
+
+The goal is not to remove all reverse engineering, but to avoid forcing every contributor to build a Game Adapter from an empty C++ file.
+
+Planned beginner-friendly helpers include:
+
+- a ready-to-fill Game Adapter template
+- guided Title ID / game version / executable configuration
+- example `mod.json`, `content/`, `textures/`, `behavior/` and `patches/` layouts
+- automatic generation of starter adapter files
+- checks for common RPX/RPL, Unity and Mono information when available
+- signature/address verification helpers
+- clear logs explaining what succeeded or failed
+- example adapters based on already-supported games
+- step-by-step documentation for basic file replacement before advanced hooks
+- PC-side helper tools for tasks that are impractical to perform directly on the Wii U
+
+A beginner should eventually be able to follow a workflow similar to:
+
+```text
+Select / identify game
+        ↓
+Enter Title ID + version
+        ↓
+Provide legally extracted executable/files for analysis
+        ↓
+Solar Compatibility Kit checks the game structure
+        ↓
+Generate starter Game Adapter
+        ↓
+Add simple mod payloads
+        ↓
+Test on Wii U
+        ↓
+Use advanced hooks only if the mod actually needs them
+```
+
+Simple games or file-replacement-only mods should require little code. Deep gameplay modifications may still require C/C++, reverse engineering or game-specific research.
+
+> The Game Compatibility Kit is a **planned future release/tooling project** and is not available yet.
+
+---
+
 # 🗺️ Roadmap
 
 ## Near term
@@ -472,6 +517,7 @@ Current important validation work includes:
 
 Possible future Solar targets/features include:
 
+- **Solar Game Compatibility Kit for beginner contributors**
 - Minecraft Wii U texture/resource pack conversion experiments
 - Minecraft Wii U skin-pack conversion/import
 - selected Bedrock/Java asset conversion where technically possible

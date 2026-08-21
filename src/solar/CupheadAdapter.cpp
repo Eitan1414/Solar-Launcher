@@ -12,11 +12,14 @@ constexpr uint64_t SupportedTitleIds[] = {TitleId};
 // decompressed .text section (Title ID 0005000021000000, title version 0).
 constexpr uint32_t LinkedTextBase = 0x02000000;
 constexpr uint32_t MonoCompileMethodAddress = 0x02067430;
+
+// Only the first 12 bytes are used for runtime verification. The following
+// instruction contains a relocation in the RPX (.rela.text at +0x0E), so its
+// immediate changes when the Wii U loader maps the executable in memory.
 constexpr uint8_t MonoCompileMethodBytes[] = {
     0x7C, 0x08, 0x02, 0xA6,
     0x90, 0x01, 0x00, 0x04,
     0x94, 0x21, 0xFF, 0xF8,
-    0x3D, 0x80, 0x10, 0x28,
 };
 
 constexpr uint8_t MonoMethodGetNameBytes[] = {0x80, 0x63, 0x00, 0x10, 0x4E, 0x80, 0x00, 0x20};

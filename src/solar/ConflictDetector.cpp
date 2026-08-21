@@ -27,6 +27,16 @@ bool IsDirectory(const std::string &path) {
     return stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
 }
 
+const char *ChoosePackDirectory(const ModInfo &mod, const char *primary, const char *alias) {
+    if (IsDirectory(mod.path + "/" + primary)) {
+        return primary;
+    }
+    if (IsDirectory(mod.path + "/" + alias)) {
+        return alias;
+    }
+    return nullptr;
+}
+
 std::string NormalizeDeletedMarker(const std::string &relativePath) {
     const size_t slash = relativePath.find_last_of('/');
     const size_t leafPos = slash == std::string::npos ? 0 : slash + 1;
@@ -115,6 +125,21 @@ void ScanDirectory(const std::string &basePath,
     closedir(directory);
 }
 
+void ScanContentAlias(const ModInfo &mod,
+                      const char *directoryName,
+                      size_t owner,
+                      ScanState &state) {
+    if (directoryName == nullptr) {
+        return;
+    }
+    const std::string path = mod.path + "/" + directoryName;
+    if (IsDirectory(path)) {
+        // Texture/behavior packs target exactly the same namespace as a normal
+        // content/ payload, so conflicts are deliberately compared together.
+        ScanDirectory(path, "", "content", owner, 0, state);
+    }
+}
+
 } // namespace
 
 ConflictReport ConflictDetector::Analyze(const std::vector<ModInfo> &mods) {
@@ -129,6 +154,14 @@ ConflictReport ConflictDetector::Analyze(const std::vector<ModInfo> &mods) {
 
         if (mod.hasContent && IsDirectory(mod.path + "/content")) {
             ScanDirectory(mod.path + "/content", "", "content", index, 0, state);
+        }
+
+        if (mod.hasTexturePack) {
+            ScanContentAlias(mod, ChoosePackDirectory(mod, "textures", "texture_pack"), index, state);
+        }
+
+        if (mod.hasBehaviorPack) {
+            ScanContentAlias(mod, ChoosePackDirectory(mod, "behavior", "behavior_pack"), index, state);
         }
 
         if (mod.hasAoc && IsDirectory(mod.path + "/aoc")) {

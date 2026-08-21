@@ -1,0 +1,9 @@
+{
+  "name": "Cuphead Combined Pack Test",
+  "author": "Solar Launcher",
+  "version": "0.1-test",
+  "titleId": "0005000021000000",
+  "type": "cuphead-pack",
+  "enabled": false,
+  "priority": 700
+}

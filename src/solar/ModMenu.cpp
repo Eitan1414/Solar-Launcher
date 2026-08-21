@@ -31,24 +31,29 @@ constexpr uint32_t ScreenBlack = 0x00000000;
 constexpr int FontPixelWidth = 8;
 constexpr int FontPixelHeight = 16;
 constexpr int PanelDividerColumn = 41;
-constexpr int HeaderBottomRow = 10;
-constexpr int ContentBottomRow = 21;
+constexpr int HeaderBottomRow = 14;
+constexpr int ContentBottomRow = 25;
+constexpr int TvTextColumns = 158;
+constexpr int DrcTextColumns = 106;
 
-// Compact Wii U OSScreen rendition of the real Solar Launcher branding.
-// The whole header is pure monochrome text on black. The sun, inner lightning/L
-// and title are built from ASCII plus binary digits so it keeps the generated
-// terminal-art look while fitting both the TV and GamePad built-in font.
+// Full-width binary/ASCII rendition of the Solar Launcher brand.
+// It deliberately uses 14 rows instead of compressing the logo into the menu.
+// Every line stays within the GamePad's 106-column OSScreen budget.
 constexpr const char *BinaryLogo[] = {
-    "       1        0      ",
-    "    01 111 10          ",
-    "  10  .-----.  01      111 000 1    0  11    0    1  0 0 1 1 000 1 1 000 11",
-    "1----/   111  \\----0   1   0 0 1   0 0 1 1   0   1 1 0 0 111 0   1 1 0   1 1",
-    "     |   1     |        111 0 0 1   000 11    0   111 0 0 111 0   111 00  11",
-    "0----|   1 11  |----1    1 0 0 1   0 0 1 1   0   1 1 0 0 111 0   1 1 0   1 1",
-    "     |   1110  |        111 000 111 0 0 1 1   000 1 1 000 1 1 000 1 1 000 1 1",
-    "1----\\     10 /----0   0101  Universal Wii U modding framework  1010",
-    "  01  '-----'  10            Load. Combine. Expand.",
-    "     0   /1\\   1             v0.5  |  Cuphead Test 1B",
+    "        1",
+    "      11111",
+    "  10    111    01      11111 01110 1     01110 11110     1     01110 1   1 1   1 01111 1   1 11111 11110",
+    "     .-------.         1     1   1 1     1   1 1   1     1     1   1 1   1 11  1 1     1   1 1     1   1",
+    "01--/   1111  \\--10    1     1   1 1     1   1 1   1     1     1   1 1   1 11  1 1     1   1 1     1   1",
+    "   |   111    |        11111 1   1 1     11111 11110     1     11111 1   1 1 1 1 1     11111 11110 11110",
+    "---|  11      |---         1 1   1 1     1   1 1  1      1     1   1 1   1 1  11 1     1   1 1     1  1",
+    "   |  1111110 |            1 1   1 1     1   1 1   1     1     1   1 1   1 1  11 1     1   1 1     1   1",
+    "10--\\     111 /--01    11111 01110 11111 1   1 1   1     11111 1   1 01110 1   1 01111 1   1 11111 1   1",
+    "     '----11-'",
+    "  01    /11\\    10     0101 Universal Wii U modding framework 1010",
+    "      111  111         Load. Combine. Expand.",
+    "       11  11          v0.5 | Cuphead Test 1B",
+    "        1  0",
 };
 constexpr size_t BinaryLogoLineCount = sizeof(BinaryLogo) / sizeof(BinaryLogo[0]);
 
@@ -137,17 +142,35 @@ void DeinitScreen() {
     }
 }
 
+void PutClippedLine(OSScreenID screen, int columns, int x, int y, const char *line) {
+    if (line == nullptr || x < 0 || x >= columns) {
+        return;
+    }
+
+    char clipped[192] = {};
+    std::snprintf(clipped, sizeof(clipped), "%s", line);
+
+    const int available = columns - x;
+    if (available <= 0) {
+        return;
+    }
+    if (available < static_cast<int>(sizeof(clipped))) {
+        clipped[available] = '\0';
+    }
+
+    OSScreenPutFontEx(screen, x, y, clipped);
+}
+
 void PrintBoth(int x, int y, const char *format, ...) {
-    char line[128] = {};
+    char line[192] = {};
 
     va_list args;
     va_start(args, format);
     vsnprintf(line, sizeof(line), format, args);
     va_end(args);
 
-    line[79] = '\0';
-    OSScreenPutFontEx(SCREEN_TV, x, y, line);
-    OSScreenPutFontEx(SCREEN_DRC, x, y, line);
+    PutClippedLine(SCREEN_TV, TvTextColumns, x, y, line);
+    PutClippedLine(SCREEN_DRC, DrcTextColumns, x, y, line);
 }
 
 void DrawHorizontalLine(OSScreenID screen, int y, int width, uint32_t colour) {
@@ -200,7 +223,7 @@ void RenderBootAnimation() {
 
         OSScreenFlipBuffersEx(SCREEN_TV);
         OSScreenFlipBuffersEx(SCREEN_DRC);
-        OSSleepTicks(OSMillisecondsToTicks(35));
+        OSSleepTicks(OSMillisecondsToTicks(28));
     }
 
     OSSleepTicks(OSMillisecondsToTicks(100));
@@ -211,32 +234,32 @@ void RenderDetails(uint64_t titleId,
                    size_t conflictCount,
                    bool technicalDetails) {
     if (!technicalDetails) {
-        PrintBoth(43, 11, "MOD INFORMATION");
-        PrintBoth(43, 12, "Name:     %-30.30s", mod.name.c_str());
-        PrintBoth(43, 13, "Author:   %-30.30s", mod.author.c_str());
-        PrintBoth(43, 14, "Version:  %-30.30s", mod.version.c_str());
-        PrintBoth(43, 15, "Type:     %-30.30s", mod.type.c_str());
-        PrintBoth(43, 16, "Priority: %d", mod.priority);
-        PrintBoth(43, 17, "Conflicts: %u", static_cast<unsigned int>(conflictCount));
-        PrintBoth(43, 18, "Payload: C:%s A:%s P:%s",
+        PrintBoth(43, 15, "MOD INFORMATION");
+        PrintBoth(43, 16, "Name:     %-30.30s", mod.name.c_str());
+        PrintBoth(43, 17, "Author:   %-30.30s", mod.author.c_str());
+        PrintBoth(43, 18, "Version:  %-30.30s", mod.version.c_str());
+        PrintBoth(43, 19, "Type:     %-30.30s", mod.type.c_str());
+        PrintBoth(43, 20, "Priority: %d", mod.priority);
+        PrintBoth(43, 21, "Conflicts: %u", static_cast<unsigned int>(conflictCount));
+        PrintBoth(43, 22, "Payload: C:%s A:%s P:%s",
                   mod.hasContent ? "yes" : "no",
                   mod.hasAoc ? "yes" : "no",
                   mod.hasPatches ? "yes" : "no");
-        PrintBoth(43, 19, "Source:   %s", mod.legacySDCafiine ? "SDCafiine" : "Solar");
-        PrintBoth(43, 20, "X: technical details");
+        PrintBoth(43, 23, "Source:   %s", mod.legacySDCafiine ? "SDCafiine" : "Solar");
+        PrintBoth(43, 24, "X: technical details");
         return;
     }
 
-    PrintBoth(43, 11, "TECHNICAL DETAILS");
-    PrintBoth(43, 12, "Title:  %s", TitleManager::FormatTitleId(titleId).c_str());
-    PrintBoth(43, 13, "Folder: %-30.30s", mod.directoryName.c_str());
-    PrintBoth(43, 14, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
-    PrintBoth(43, 15, "Current: %s  P:%d", mod.enabled ? "enabled" : "disabled", mod.priority);
-    PrintBoth(43, 16, "Default: %s  P:%d", mod.defaultEnabled ? "enabled" : "disabled", mod.defaultPriority);
-    PrintBoth(43, 17, "content/: %s", mod.hasContent ? "present" : "none");
-    PrintBoth(43, 18, "aoc/:     %s", mod.hasAoc ? "present" : "none");
-    PrintBoth(43, 19, "patches/: %s", mod.hasPatches ? "present" : "none");
-    PrintBoth(43, 20, "X: mod information");
+    PrintBoth(43, 15, "TECHNICAL DETAILS");
+    PrintBoth(43, 16, "Title:  %s", TitleManager::FormatTitleId(titleId).c_str());
+    PrintBoth(43, 17, "Folder: %-30.30s", mod.directoryName.c_str());
+    PrintBoth(43, 18, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
+    PrintBoth(43, 19, "Current: %s  P:%d", mod.enabled ? "enabled" : "disabled", mod.priority);
+    PrintBoth(43, 20, "Default: %s  P:%d", mod.defaultEnabled ? "enabled" : "disabled", mod.defaultPriority);
+    PrintBoth(43, 21, "content/: %s", mod.hasContent ? "present" : "none");
+    PrintBoth(43, 22, "aoc/:     %s", mod.hasAoc ? "present" : "none");
+    PrintBoth(43, 23, "patches/: %s", mod.hasPatches ? "present" : "none");
+    PrintBoth(43, 24, "X: mod information");
 }
 
 void Render(uint64_t titleId,
@@ -255,9 +278,9 @@ void Render(uint64_t titleId,
     const size_t end = std::min(start + static_cast<size_t>(ItemsPerPage), mods.size());
     const size_t pages = std::max<size_t>(1, (mods.size() + ItemsPerPage - 1) / ItemsPerPage);
 
-    PrintBoth(1, 11, "MODS  %u installed", static_cast<unsigned int>(mods.size()));
+    PrintBoth(1, 15, "MODS  %u installed", static_cast<unsigned int>(mods.size()));
 
-    int row = 12;
+    int row = 16;
     for (size_t index = start; index < end; ++index, ++row) {
         const ModInfo &mod = mods[index];
         const size_t conflictCount = index < conflicts.perMod.size() ? conflicts.perMod[index] : 0;
@@ -279,9 +302,9 @@ void Render(uint64_t titleId,
         RenderDetails(titleId, mods[selected], conflictCount, technicalDetails);
     }
 
-    PrintBoth(1, 22, "A Toggle   X Details   L/R Priority   Y Reset");
-    PrintBoth(1, 23, "+ Save & launch mods   B Launch vanilla once");
-    PrintBoth(1, 24, "0101 SOLAR READY 1010   Page %u/%u   File conflicts: %u%s",
+    PrintBoth(1, 26, "A Toggle   X Details   L/R Priority   Y Reset");
+    PrintBoth(1, 27, "+ Save & launch mods   B Launch vanilla once");
+    PrintBoth(1, 28, "0101 SOLAR READY 1010   Page %u/%u   File conflicts: %u%s",
               static_cast<unsigned int>(page + 1),
               static_cast<unsigned int>(pages),
               static_cast<unsigned int>(conflicts.conflictingPaths),

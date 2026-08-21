@@ -24,6 +24,15 @@ struct ModInfo {
     bool hasContent = false;
     bool hasAoc = false;
     bool hasPatches = false;
+
+    // Cuphead-specific convenience payloads. These are content-redirection
+    // aliases with clearer semantics for pack creators:
+    //   textures/ (or texture_pack/) -> /vol/content
+    //   behavior/ (or behavior_pack/) -> /vol/content
+    // Both directories mirror the game's /vol/content relative paths.
+    bool hasTexturePack = false;
+    bool hasBehaviorPack = false;
+
     bool legacySDCafiine = false;
 };
 

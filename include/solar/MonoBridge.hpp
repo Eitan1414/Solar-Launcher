@@ -5,6 +5,13 @@
 
 namespace Solar::MonoBridge {
 
+using CompiledMethodObserver = void (*)(void *method,
+                                        void *compiledCode,
+                                        void *klass,
+                                        const char *namespaceName,
+                                        const char *className,
+                                        const char *methodName);
+
 struct RuntimeMetadataProfile {
     uint32_t methodGetNameAddress = 0;
     const uint8_t *methodGetNameBytes = nullptr;
@@ -40,12 +47,23 @@ struct CompileHookTarget {
     const RuntimeMetadataProfile *runtimeProfile = nullptr;
     const char *const *interestingClasses = nullptr;
     uint32_t interestingClassCount = 0;
+
+    // Optional game-specific observer. It is called only after Mono metadata
+    // helpers have been validated, so adapters can safely inspect method/class
+    // metadata without duplicating the compile hook.
+    CompiledMethodObserver observer = nullptr;
 };
 
 // Registers a trusted FunctionPatcher hook for mono_compile_method. The bridge
 // first validates the method signature in the loaded RPX and resolves the
 // runtime text delta before registering an address-based patch.
 bool RegisterCompileTraceHook(const std::string &hookId, const CompileHookTarget &target);
+
+// Runtime relocation information discovered from the loaded executable.
+// Useful for game adapters that have additional Mono API addresses verified
+// against the same RPX image.
+int32_t RuntimeDelta();
+bool RuntimeMetadataReady();
 
 // Clears only runtime observations/profile state. Applied FunctionPatcher handles
 // are owned by PatchEngine and hook registrations by NativeHookRegistry.

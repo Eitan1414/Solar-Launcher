@@ -319,10 +319,12 @@ void RenderDRCDetails(uint64_t titleId, const ModInfo &mod, size_t conflictCount
         PrintDRC(2, DrcInfoFirstRow + 2, "Status:%s   Priority:%d   Conflicts:%u",
                  mod.enabled ? "ON" : "OFF", mod.priority,
                  static_cast<unsigned int>(conflictCount));
-        PrintDRC(2, DrcInfoFirstRow + 3, "Type:%.12s   Source:%s", mod.type.c_str(),
+        PrintDRC(2, DrcInfoFirstRow + 3, "Type:%.14s   Source:%s", mod.type.c_str(),
                  mod.legacySDCafiine ? "SDCafiine" : "Solar");
-        PrintDRC(2, DrcInfoFirstRow + 4, "Payload  content:%s  aoc:%s  patches:%s",
+        PrintDRC(2, DrcInfoFirstRow + 4, "Payload C:%s T:%s B:%s A:%s P:%s",
                  mod.hasContent ? "yes" : "no",
+                 mod.hasTexturePack ? "yes" : "no",
+                 mod.hasBehaviorPack ? "yes" : "no",
                  mod.hasAoc ? "yes" : "no",
                  mod.hasPatches ? "yes" : "no");
     } else {
@@ -332,8 +334,10 @@ void RenderDRCDetails(uint64_t titleId, const ModInfo &mod, size_t conflictCount
         PrintDRC(2, DrcInfoFirstRow + 2, "Current:%s P:%d   Default:%s P:%d",
                  mod.enabled ? "ON" : "OFF", mod.priority,
                  mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
-        PrintDRC(2, DrcInfoFirstRow + 3, "content:%s  aoc:%s  patches:%s",
+        PrintDRC(2, DrcInfoFirstRow + 3, "C:%s T:%s B:%s A:%s P:%s",
                  mod.hasContent ? "yes" : "no",
+                 mod.hasTexturePack ? "yes" : "no",
+                 mod.hasBehaviorPack ? "yes" : "no",
                  mod.hasAoc ? "yes" : "no",
                  mod.hasPatches ? "yes" : "no");
         PrintDRC(2, DrcInfoFirstRow + 4, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
@@ -345,9 +349,14 @@ void RenderTVDetails(uint64_t titleId, const ModInfo &mod, size_t conflictCount,
         PrintTV(TvInfoColumn, TvContentHeaderRow, "MOD INFORMATION");
         PrintTV(TvInfoColumn, TvContentFirstRow + 0, "Name: %-32.32s", mod.name.c_str());
         PrintTV(TvInfoColumn, TvContentFirstRow + 1, "Author: %-22.22s  v%.12s", mod.author.c_str(), mod.version.c_str());
-        PrintTV(TvInfoColumn, TvContentFirstRow + 2, "Status:%s  Type:%.10s  Priority:%d", mod.enabled ? "ON" : "OFF", mod.type.c_str(), mod.priority);
+        PrintTV(TvInfoColumn, TvContentFirstRow + 2, "Status:%s  Type:%.14s  Priority:%d", mod.enabled ? "ON" : "OFF", mod.type.c_str(), mod.priority);
         PrintTV(TvInfoColumn, TvContentFirstRow + 3, "Conflicts:%u  Source:%s", static_cast<unsigned int>(conflictCount), mod.legacySDCafiine ? "SDCafiine" : "Solar");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 4, "content:%s  aoc:%s  patches:%s", mod.hasContent ? "yes" : "no", mod.hasAoc ? "yes" : "no", mod.hasPatches ? "yes" : "no");
+        PrintTV(TvInfoColumn, TvContentFirstRow + 4, "C:%s T:%s B:%s A:%s P:%s",
+                mod.hasContent ? "yes" : "no",
+                mod.hasTexturePack ? "yes" : "no",
+                mod.hasBehaviorPack ? "yes" : "no",
+                mod.hasAoc ? "yes" : "no",
+                mod.hasPatches ? "yes" : "no");
         PrintTV(TvInfoColumn, TvContentFirstRow + 5, "X: technical details");
     } else {
         PrintTV(TvInfoColumn, TvContentHeaderRow, "TECHNICAL DETAILS");
@@ -355,7 +364,12 @@ void RenderTVDetails(uint64_t titleId, const ModInfo &mod, size_t conflictCount,
         PrintTV(TvInfoColumn, TvContentFirstRow + 1, "Folder: %-34.34s", mod.directoryName.c_str());
         PrintTV(TvInfoColumn, TvContentFirstRow + 2, "Current:%s P:%d | Default:%s P:%d", mod.enabled ? "ON" : "OFF", mod.priority, mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
         PrintTV(TvInfoColumn, TvContentFirstRow + 3, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 4, "content:%s  aoc:%s  patches:%s", mod.hasContent ? "yes" : "no", mod.hasAoc ? "yes" : "no", mod.hasPatches ? "yes" : "no");
+        PrintTV(TvInfoColumn, TvContentFirstRow + 4, "C:%s T:%s B:%s A:%s P:%s",
+                mod.hasContent ? "yes" : "no",
+                mod.hasTexturePack ? "yes" : "no",
+                mod.hasBehaviorPack ? "yes" : "no",
+                mod.hasAoc ? "yes" : "no",
+                mod.hasPatches ? "yes" : "no");
         PrintTV(TvInfoColumn, TvContentFirstRow + 5, "X: mod information");
     }
 }

@@ -18,26 +18,46 @@ bool IsDirectory(const std::string &path) {
     return stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
 }
 
-bool AddLayer(const ModInfo &mod, const char *subdir, FSLayerType layerType) {
-    const std::string replacementPath = mod.path + "/" + subdir;
+const char *ChoosePackDirectory(const ModInfo &mod, const char *primary, const char *alias) {
+    if (IsDirectory(mod.path + "/" + primary)) {
+        return primary;
+    }
+    if (IsDirectory(mod.path + "/" + alias)) {
+        return alias;
+    }
+    return nullptr;
+}
+
+bool AddLayer(const ModInfo &mod,
+              const char *sourceSubdir,
+              const char *targetLabel,
+              FSLayerType layerType) {
+    if (sourceSubdir == nullptr) {
+        return false;
+    }
+
+    const std::string replacementPath = mod.path + "/" + sourceSubdir;
     if (!IsDirectory(replacementPath)) {
         return false;
     }
 
     CRLayerHandle handle = 0;
-    const std::string layerName = "Solar: " + mod.name + " /vol/" + subdir;
+    const std::string layerName = "Solar: " + mod.name + " /vol/" + targetLabel + " <- " + sourceSubdir;
     const ContentRedirectionStatus result = ContentRedirection_AddFSLayer(
         &handle, layerName.c_str(), replacementPath.c_str(), layerType);
 
     if (result != CONTENT_REDIRECTION_RESULT_SUCCESS) {
-        Logger::Error("Failed to add %s layer for %s: %s (%d)", subdir, mod.name.c_str(),
+        Logger::Error("Failed to add %s layer for %s: %s (%d)", sourceSubdir, mod.name.c_str(),
                       ContentRedirection_GetStatusStr(result), result);
         return false;
     }
 
     gLayers.push_back(handle);
-    Logger::Info("Redirecting /vol/%s with %s (priority=%d%s)", subdir,
-                 replacementPath.c_str(), mod.priority,
+    Logger::Info("Redirecting /vol/%s with %s (payload=%s priority=%d%s)",
+                 targetLabel,
+                 replacementPath.c_str(),
+                 sourceSubdir,
+                 mod.priority,
                  mod.legacySDCafiine ? ", SDCafiine" : "");
     return true;
 }
@@ -108,7 +128,8 @@ size_t Apply(const std::vector<ModInfo> &mods) {
     enabledMods.reserve(mods.size());
 
     for (const auto &mod : mods) {
-        if (!mod.enabled || (!mod.hasContent && !mod.hasAoc)) {
+        if (!mod.enabled ||
+            (!mod.hasContent && !mod.hasAoc && !mod.hasTexturePack && !mod.hasBehaviorPack)) {
             continue;
         }
         enabledMods.push_back(&mod);
@@ -125,17 +146,25 @@ size_t Apply(const std::vector<ModInfo> &mods) {
     for (const ModInfo *mod : enabledMods) {
         bool applied = false;
         if (mod->hasContent) {
-            applied |= AddLayer(*mod, "content", FS_LAYER_TYPE_CONTENT_MERGE);
+            applied |= AddLayer(*mod, "content", "content", FS_LAYER_TYPE_CONTENT_MERGE);
+        }
+        if (mod->hasTexturePack) {
+            const char *dir = ChoosePackDirectory(*mod, "textures", "texture_pack");
+            applied |= AddLayer(*mod, dir, "content", FS_LAYER_TYPE_CONTENT_MERGE);
+        }
+        if (mod->hasBehaviorPack) {
+            const char *dir = ChoosePackDirectory(*mod, "behavior", "behavior_pack");
+            applied |= AddLayer(*mod, dir, "content", FS_LAYER_TYPE_CONTENT_MERGE);
         }
         if (mod->hasAoc) {
-            applied |= AddLayer(*mod, "aoc", FS_LAYER_TYPE_AOC_MERGE);
+            applied |= AddLayer(*mod, "aoc", "aoc", FS_LAYER_TYPE_AOC_MERGE);
         }
         if (applied) {
             ++appliedMods;
         }
     }
 
-    Logger::Info("Applied %u file mod(s) using %u redirection layer(s)",
+    Logger::Info("Applied %u file/pack mod(s) using %u redirection layer(s)",
                  static_cast<unsigned int>(appliedMods),
                  static_cast<unsigned int>(gLayers.size()));
     return appliedMods;

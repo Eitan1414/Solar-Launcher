@@ -8,8 +8,17 @@ namespace {
 
 constexpr uint64_t SupportedTitleIds[] = {TitleId};
 
-// Verified from the symbol table and .text bytes of the supplied Cuphead
-// Unity-master.rpx (Title ID 0005000021000000, title version 0).
+// Verified directly from the supplied Cuphead Unity-master.rpx symbol table and
+// decompressed .text section (Title ID 0005000021000000, title version 0).
+constexpr uint32_t LinkedTextBase = 0x02000000;
+constexpr uint32_t MonoCompileMethodAddress = 0x02067430;
+constexpr uint8_t MonoCompileMethodBytes[] = {
+    0x7C, 0x08, 0x02, 0xA6,
+    0x90, 0x01, 0x00, 0x04,
+    0x94, 0x21, 0xFF, 0xF8,
+    0x3D, 0x80, 0x10, 0x28,
+};
+
 constexpr uint8_t MonoMethodGetNameBytes[] = {0x80, 0x63, 0x00, 0x10, 0x4E, 0x80, 0x00, 0x20};
 constexpr uint8_t MonoMethodGetClassBytes[] = {0x80, 0x63, 0x00, 0x08, 0x4E, 0x80, 0x00, 0x20};
 constexpr uint8_t MonoClassGetNameBytes[] = {0x80, 0x63, 0x00, 0x30, 0x4E, 0x80, 0x00, 0x20};
@@ -45,6 +54,10 @@ bool RegisterHooks() {
     target.versionMin = SupportedVersion;
     target.versionMax = SupportedVersion;
     target.executableName = ExecutableName;
+    target.linkedTextBase = LinkedTextBase;
+    target.compileMethodAddress = MonoCompileMethodAddress;
+    target.compileMethodBytes = MonoCompileMethodBytes;
+    target.compileMethodBytesSize = sizeof(MonoCompileMethodBytes);
     target.runtimeProfile = &RuntimeProfile;
     target.interestingClasses = InterestingClasses;
     target.interestingClassCount = sizeof(InterestingClasses) / sizeof(InterestingClasses[0]);

@@ -38,7 +38,7 @@ constexpr int DrcWidth = 854;
 constexpr int TvTextColumns = 158;
 constexpr int DrcTextColumns = 106;
 
-// TV layout keeps the wide two-column presentation.
+// TV keeps the wide desktop-style presentation.
 constexpr int TvHeaderSeparatorY = 238;
 constexpr int TvFooterSeparatorY = 374;
 constexpr int TvContentHeaderRow = 15;
@@ -49,17 +49,18 @@ constexpr int TvLogoWidth = 900;
 constexpr int TvLogoHeight = (TvLogoWidth * EmbeddedLogo::Height) / EmbeddedLogo::Width;
 constexpr int TvLogoY = 0;
 
-// DRC has its own compact layout instead of shrinking the TV UI.
-constexpr int DrcHeaderSeparatorY = 180;
-constexpr int DrcFooterSeparatorY = 386;
-constexpr int DrcContentHeaderRow = 12;
-constexpr int DrcContentFirstRow = 13;
-constexpr int DrcInfoHeaderRow = 19;
-constexpr int DrcInfoFirstRow = 20;
-constexpr int DrcFooterFirstRow = 25;
-constexpr int DrcLogoWidth = 590;
+// GamePad is intentionally a completely separate one-column UI.
+// Nothing on DRC is laid out as a squeezed version of the TV interface.
+constexpr int DrcLogoWidth = 550;
 constexpr int DrcLogoHeight = (DrcLogoWidth * EmbeddedLogo::Height) / EmbeddedLogo::Width;
-constexpr int DrcLogoY = 8;
+constexpr int DrcLogoY = 6;
+constexpr int DrcHeaderSeparatorY = 164;
+constexpr int DrcSectionSeparatorY = 286;
+constexpr int DrcModsHeaderRow = 11;
+constexpr int DrcModsFirstRow = 12;
+constexpr int DrcInfoHeaderRow = 18;
+constexpr int DrcInfoFirstRow = 19;
+constexpr int DrcControlsFirstRow = 25;
 
 void *gTvBuffer = nullptr;
 void *gDrcBuffer = nullptr;
@@ -97,7 +98,6 @@ size_t DecodeBase64(const char *input, uint8_t *output, size_t outputCapacity) {
 
         accumulator = (accumulator << 6) | static_cast<uint32_t>(value);
         bits += 6;
-
         if (bits >= 8) {
             bits -= 8;
             if (written >= outputCapacity) {
@@ -122,19 +122,19 @@ bool EnsureLogoBitmap() {
     gLogoDecodeAttempted = true;
 
     uint8_t compressed[4608] = {};
-    const size_t compressedSize = DecodeBase64(EmbeddedLogo::Base64Zlib,
-                                               compressed,
-                                               sizeof(compressed));
+    const size_t compressedSize = DecodeBase64(
+        EmbeddedLogo::Base64Zlib, compressed, sizeof(compressed));
     if (compressedSize == 0) {
         Logger::Warn("Solar logo bitmap: base64 decode failed");
         return false;
     }
 
     uLongf outputSize = static_cast<uLongf>(sizeof(gLogoBitmap));
-    const int zResult = uncompress(gLogoBitmap,
-                                   &outputSize,
-                                   compressed,
-                                   static_cast<uLong>(compressedSize));
+    const int zResult = uncompress(
+        gLogoBitmap,
+        &outputSize,
+        compressed,
+        static_cast<uLong>(compressedSize));
     if (zResult != Z_OK || outputSize != sizeof(gLogoBitmap)) {
         Logger::Warn("Solar logo bitmap: zlib decode failed (%d, %u/%u)",
                      zResult,
@@ -323,8 +323,10 @@ void RenderHeaders() {
 void RenderChrome() {
     DrawHorizontalLine(SCREEN_TV, TvHeaderSeparatorY, TvWidth, SolarOrange);
     DrawHorizontalLine(SCREEN_TV, TvFooterSeparatorY, TvWidth, SolarOrange);
+
+    // DRC deliberately uses section lines rather than a large boxed layout.
     DrawHorizontalLine(SCREEN_DRC, DrcHeaderSeparatorY, DrcWidth, SolarOrange);
-    DrawHorizontalLine(SCREEN_DRC, DrcFooterSeparatorY, DrcWidth, SolarOrange);
+    DrawHorizontalLine(SCREEN_DRC, DrcSectionSeparatorY, DrcWidth, SolarOrange);
 }
 
 void RenderBootAnimation() {
@@ -376,12 +378,12 @@ void RenderDRCDetails(uint64_t titleId,
                       size_t conflictCount,
                       bool technicalDetails) {
     if (!technicalDetails) {
-        PrintDRC(1, DrcInfoHeaderRow, "SELECTED MOD");
-        PrintDRC(1, DrcInfoFirstRow + 0, "Name: %.45s", mod.name.c_str());
-        PrintDRC(1, DrcInfoFirstRow + 1, "Author: %.24s   Ver: %.14s", mod.author.c_str(), mod.version.c_str());
-        PrintDRC(1, DrcInfoFirstRow + 2, "Type: %.10s  Priority:%d  Conflicts:%u",
+        PrintDRC(2, DrcInfoHeaderRow, "SELECTED MOD");
+        PrintDRC(2, DrcInfoFirstRow + 0, "%.60s", mod.name.c_str());
+        PrintDRC(2, DrcInfoFirstRow + 1, "By %.30s  |  v%.16s", mod.author.c_str(), mod.version.c_str());
+        PrintDRC(2, DrcInfoFirstRow + 2, "Type: %.12s  |  Priority: %d  |  Conflicts: %u",
                  mod.type.c_str(), mod.priority, static_cast<unsigned int>(conflictCount));
-        PrintDRC(1, DrcInfoFirstRow + 3, "Payload C:%s A:%s P:%s   Source:%s   X: details",
+        PrintDRC(2, DrcInfoFirstRow + 3, "Payload  C:%s  A:%s  P:%s  |  Source: %s",
                  mod.hasContent ? "yes" : "no",
                  mod.hasAoc ? "yes" : "no",
                  mod.hasPatches ? "yes" : "no",
@@ -389,18 +391,17 @@ void RenderDRCDetails(uint64_t titleId,
         return;
     }
 
-    PrintDRC(1, DrcInfoHeaderRow, "TECHNICAL DETAILS");
-    PrintDRC(1, DrcInfoFirstRow + 0, "Title: %s   Folder: %.36s",
-             TitleManager::FormatTitleId(titleId).c_str(), mod.directoryName.c_str());
-    PrintDRC(1, DrcInfoFirstRow + 1, "Current:%s P:%d   Default:%s P:%d",
+    PrintDRC(2, DrcInfoHeaderRow, "TECHNICAL DETAILS");
+    PrintDRC(2, DrcInfoFirstRow + 0, "Title: %s", TitleManager::FormatTitleId(titleId).c_str());
+    PrintDRC(2, DrcInfoFirstRow + 1, "Folder: %.60s", mod.directoryName.c_str());
+    PrintDRC(2, DrcInfoFirstRow + 2, "Current: %s P:%d   Default: %s P:%d",
              mod.enabled ? "ON" : "OFF", mod.priority,
              mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
-    PrintDRC(1, DrcInfoFirstRow + 2, "content:%s  aoc:%s  patches:%s  Source:%s",
+    PrintDRC(2, DrcInfoFirstRow + 3, "content:%s  aoc:%s  patches:%s  source:%s",
              mod.hasContent ? "yes" : "no",
              mod.hasAoc ? "yes" : "no",
              mod.hasPatches ? "yes" : "no",
              mod.legacySDCafiine ? "SDCafiine" : "Solar");
-    PrintDRC(1, DrcInfoFirstRow + 3, "X: mod information");
 }
 
 void Render(uint64_t titleId,
@@ -419,15 +420,10 @@ void Render(uint64_t titleId,
     const size_t end = std::min(start + static_cast<size_t>(ItemsPerPage), mods.size());
     const size_t pages = std::max<size_t>(1, (mods.size() + ItemsPerPage - 1) / ItemsPerPage);
 
+    // TV
     PrintTV(1, TvContentHeaderRow, "MODS  %u installed", static_cast<unsigned int>(mods.size()));
-    PrintDRC(1, DrcContentHeaderRow, "MODS  %u installed   Page %u/%u",
-             static_cast<unsigned int>(mods.size()),
-             static_cast<unsigned int>(page + 1),
-             static_cast<unsigned int>(pages));
-
     int tvRow = TvContentFirstRow;
-    int drcRow = DrcContentFirstRow;
-    for (size_t index = start; index < end; ++index, ++tvRow, ++drcRow) {
+    for (size_t index = start; index < end; ++index, ++tvRow) {
         const ModInfo &mod = mods[index];
         const size_t conflictCount = index < conflicts.perMod.size() ? conflicts.perMod[index] : 0;
 
@@ -435,24 +431,16 @@ void Render(uint64_t titleId,
                 index == selected ? '>' : ' ',
                 mod.enabled ? "ON " : "OFF",
                 mod.name.c_str());
-        PrintDRC(1, drcRow, "%c [%s] %-52.52s",
-                 index == selected ? '>' : ' ',
-                 mod.enabled ? "ON " : "OFF",
-                 mod.name.c_str());
-
         if (conflictCount > 0) {
             PrintTV(34, tvRow, "!%u", static_cast<unsigned int>(conflictCount));
-            PrintDRC(62, drcRow, "!%u", static_cast<unsigned int>(conflictCount));
         } else if (mod.legacySDCafiine) {
             PrintTV(34, tvRow, "SDC");
-            PrintDRC(62, drcRow, "SDC");
         }
     }
 
     if (!mods.empty()) {
         const size_t conflictCount = selected < conflicts.perMod.size() ? conflicts.perMod[selected] : 0;
         RenderTVDetails(titleId, mods[selected], conflictCount, technicalDetails);
-        RenderDRCDetails(titleId, mods[selected], conflictCount, technicalDetails);
     }
 
     PrintTV(1, TvFooterFirstRow + 0, "A Toggle   X Details   L/R Priority   Y Reset");
@@ -463,9 +451,31 @@ void Render(uint64_t titleId,
             static_cast<unsigned int>(conflicts.conflictingPaths),
             conflicts.truncated ? "+" : "");
 
-    PrintDRC(1, DrcFooterFirstRow + 0, "A Toggle   X Details   L/R Priority   Y Reset");
-    PrintDRC(1, DrcFooterFirstRow + 1, "+ Save & launch mods   B Launch vanilla once");
-    PrintDRC(1, DrcFooterFirstRow + 2, "0101 SOLAR READY 1010 | Test1B   Conflicts:%u%s",
+    // GamePad: full-width vertical flow only.
+    PrintDRC(2, DrcModsHeaderRow, "MODS (%u)                       PAGE %u/%u",
+             static_cast<unsigned int>(mods.size()),
+             static_cast<unsigned int>(page + 1),
+             static_cast<unsigned int>(pages));
+
+    int drcRow = DrcModsFirstRow;
+    for (size_t index = start; index < end; ++index, ++drcRow) {
+        const ModInfo &mod = mods[index];
+        const size_t conflictCount = index < conflicts.perMod.size() ? conflicts.perMod[index] : 0;
+        PrintDRC(2, drcRow, "%c [%s] %.62s%s",
+                 index == selected ? '>' : ' ',
+                 mod.enabled ? "ON " : "OFF",
+                 mod.name.c_str(),
+                 conflictCount > 0 ? "  !" : "");
+    }
+
+    if (!mods.empty()) {
+        const size_t conflictCount = selected < conflicts.perMod.size() ? conflicts.perMod[selected] : 0;
+        RenderDRCDetails(titleId, mods[selected], conflictCount, technicalDetails);
+    }
+
+    PrintDRC(2, DrcControlsFirstRow + 0, "A Toggle       X Details       L/R Priority");
+    PrintDRC(2, DrcControlsFirstRow + 1, "Y Reset        + Launch mods   B Vanilla");
+    PrintDRC(2, DrcControlsFirstRow + 2, "0101 SOLAR READY 1010   Test1B   Conflicts:%u%s",
              static_cast<unsigned int>(conflicts.conflictingPaths),
              conflicts.truncated ? "+" : "");
 

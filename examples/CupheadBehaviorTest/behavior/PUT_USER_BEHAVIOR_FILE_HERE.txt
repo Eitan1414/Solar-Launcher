@@ -1,0 +1,5 @@
+Place a legally extracted and minimally modified Cuphead behavior file here, preserving its exact path relative to /vol/content.
+
+Recommended first target: a copy of Assembly-CSharp.dll from the user's own Cuphead extraction, with one small reversible gameplay change.
+
+Delete this placeholder before hardware testing.

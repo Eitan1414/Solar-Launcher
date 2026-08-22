@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace Solar {
 namespace {
@@ -44,30 +45,156 @@ constexpr int TvLogoWidth = 900;
 constexpr int TvLogoHeight = (TvLogoWidth * EmbeddedLogo::Height) / EmbeddedLogo::Width;
 constexpr int TvHeaderSeparatorY = 238;
 constexpr int TvFooterSeparatorY = 374;
-constexpr int TvContentHeaderRow = 15;
-constexpr int TvContentFirstRow = 16;
+constexpr int TvCategoryRow = 15;
+constexpr int TvContentHeaderRow = 16;
+constexpr int TvContentFirstRow = 17;
+constexpr int TvInfoHeaderRow = 16;
+constexpr int TvInfoFirstRow = 17;
 constexpr int TvInfoColumn = 43;
 constexpr int TvFooterFirstRow = 24;
 
-// GamePad uses its own spacious vertical layout. Four mods per page leaves
-// enough room for details and controls without squeezing the text together.
+// GamePad uses its own spacious vertical layout. Categories get their own row,
+// followed by four visible mods per page and then the selected-mod details.
 constexpr int DrcLogoWidth = 500;
 constexpr int DrcLogoHeight = (DrcLogoWidth * EmbeddedLogo::Height) / EmbeddedLogo::Width;
 constexpr int DrcLogoY = 5;
 constexpr int DrcHeaderSeparatorY = 150;
-constexpr int DrcModsHeaderRow = 10;
-constexpr int DrcModsFirstRow = 11;
-constexpr int DrcInfoSeparatorY = 244;
-constexpr int DrcInfoHeaderRow = 16;
-constexpr int DrcInfoFirstRow = 17;
+constexpr int DrcCategoryRow = 10;
+constexpr int DrcModsHeaderRow = 11;
+constexpr int DrcModsFirstRow = 12;
+constexpr int DrcInfoSeparatorY = 260;
+constexpr int DrcInfoHeaderRow = 17;
+constexpr int DrcInfoFirstRow = 18;
 constexpr int DrcControlsSeparatorY = 365;
 constexpr int DrcControlsFirstRow = 24;
+
+enum class ModCategory : uint8_t {
+    All = 0,
+    Mods,
+    Textures,
+    Behavior,
+    Patches,
+    Aoc,
+    SDCafiine,
+    Count
+};
 
 void *gTvBuffer = nullptr;
 void *gDrcBuffer = nullptr;
 uint8_t gLogoBitmap[EmbeddedLogo::BitmapSize] = {};
 bool gLogoDecodeAttempted = false;
 bool gLogoReady = false;
+
+const char *CategoryLabel(ModCategory category) {
+    switch (category) {
+        case ModCategory::All: return "ALL";
+        case ModCategory::Mods: return "MODS";
+        case ModCategory::Textures: return "TEXTURES";
+        case ModCategory::Behavior: return "BEHAVIOR";
+        case ModCategory::Patches: return "PATCHES";
+        case ModCategory::Aoc: return "AOC";
+        case ModCategory::SDCafiine: return "SDCAFIINE";
+        default: return "ALL";
+    }
+}
+
+ModCategory StepCategory(ModCategory category, int direction) {
+    const int count = static_cast<int>(ModCategory::Count);
+    int value = static_cast<int>(category) + direction;
+    if (value < 0) value = count - 1;
+    if (value >= count) value = 0;
+    return static_cast<ModCategory>(value);
+}
+
+bool MatchesCategory(const ModInfo &mod, ModCategory category) {
+    switch (category) {
+        case ModCategory::All:
+            return true;
+        case ModCategory::Mods:
+            // General Solar mods. Special Texture/Behavior packs and legacy
+            // SDCafiine packs have dedicated filters.
+            return !mod.legacySDCafiine && !mod.hasTexturePack && !mod.hasBehaviorPack;
+        case ModCategory::Textures:
+            return mod.hasTexturePack;
+        case ModCategory::Behavior:
+            return mod.hasBehaviorPack;
+        case ModCategory::Patches:
+            return mod.hasPatches;
+        case ModCategory::Aoc:
+            return mod.hasAoc;
+        case ModCategory::SDCafiine:
+            return mod.legacySDCafiine;
+        default:
+            return true;
+    }
+}
+
+std::vector<size_t> VisibleIndices(const std::vector<ModInfo> &mods, ModCategory category) {
+    std::vector<size_t> indices;
+    indices.reserve(mods.size());
+    for (size_t index = 0; index < mods.size(); ++index) {
+        if (MatchesCategory(mods[index], category)) indices.push_back(index);
+    }
+    return indices;
+}
+
+size_t VisiblePosition(const std::vector<size_t> &visible, size_t selected) {
+    const auto it = std::find(visible.begin(), visible.end(), selected);
+    return it == visible.end() ? 0 : static_cast<size_t>(std::distance(visible.begin(), it));
+}
+
+bool EnsureCategorySelection(const std::vector<ModInfo> &mods,
+                             ModCategory category,
+                             size_t &selected) {
+    const auto visible = VisibleIndices(mods, category);
+    if (visible.empty()) return false;
+    if (std::find(visible.begin(), visible.end(), selected) == visible.end()) {
+        selected = visible.front();
+    }
+    return true;
+}
+
+size_t EnabledCount(const std::vector<ModInfo> &mods) {
+    return static_cast<size_t>(std::count_if(mods.begin(), mods.end(), [](const ModInfo &mod) {
+        return mod.enabled;
+    }));
+}
+
+size_t EnabledVisibleCount(const std::vector<ModInfo> &mods,
+                           const std::vector<size_t> &visible) {
+    size_t enabled = 0;
+    for (const size_t index : visible) {
+        if (index < mods.size() && mods[index].enabled) ++enabled;
+    }
+    return enabled;
+}
+
+std::string CategoryBar(ModCategory selected) {
+    std::string bar = "FILTER: ";
+    for (int value = 0; value < static_cast<int>(ModCategory::Count); ++value) {
+        const auto category = static_cast<ModCategory>(value);
+        const char *label = CategoryLabel(category);
+        if (category == selected) {
+            bar += "[";
+            bar += label;
+            bar += "]";
+        } else {
+            bar += label;
+        }
+        if (value + 1 < static_cast<int>(ModCategory::Count)) bar += "  ";
+    }
+    return bar;
+}
+
+const char *ModTypeTag(const ModInfo &mod) {
+    if (mod.legacySDCafiine) return "SDC";
+    if (mod.hasTexturePack && mod.hasBehaviorPack) return "T+B";
+    if (mod.hasTexturePack) return "TEX";
+    if (mod.hasBehaviorPack) return "BEH";
+    if (mod.hasPatches) return "PAT";
+    if (mod.hasAoc) return "AOC";
+    return "MOD";
+}
 
 int Base64Value(char c) {
     if (c >= 'A' && c <= 'Z') return c - 'A';
@@ -289,12 +416,6 @@ uint32_t PollButtons() {
     return triggered;
 }
 
-size_t EnabledCount(const std::vector<ModInfo> &mods) {
-    return static_cast<size_t>(std::count_if(mods.begin(), mods.end(), [](const ModInfo &mod) {
-        return mod.enabled;
-    }));
-}
-
 void RenderHeader() {
     if (EnsureLogoBitmap()) {
         DrawLogo(SCREEN_TV, TvWidth, TvLogoWidth, TvLogoHeight, 0);
@@ -346,37 +467,48 @@ void RenderDRCDetails(uint64_t titleId, const ModInfo &mod, size_t conflictCount
 
 void RenderTVDetails(uint64_t titleId, const ModInfo &mod, size_t conflictCount, bool technical) {
     if (!technical) {
-        PrintTV(TvInfoColumn, TvContentHeaderRow, "MOD INFORMATION");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 0, "Name: %-32.32s", mod.name.c_str());
-        PrintTV(TvInfoColumn, TvContentFirstRow + 1, "Author: %-22.22s  v%.12s", mod.author.c_str(), mod.version.c_str());
-        PrintTV(TvInfoColumn, TvContentFirstRow + 2, "Status:%s  Type:%.14s  Priority:%d", mod.enabled ? "ON" : "OFF", mod.type.c_str(), mod.priority);
-        PrintTV(TvInfoColumn, TvContentFirstRow + 3, "Conflicts:%u  Source:%s", static_cast<unsigned int>(conflictCount), mod.legacySDCafiine ? "SDCafiine" : "Solar");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 4, "C:%s T:%s B:%s A:%s P:%s",
+        PrintTV(TvInfoColumn, TvInfoHeaderRow, "MOD INFORMATION");
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 0, "Name: %-32.32s", mod.name.c_str());
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 1, "Author: %-22.22s  v%.12s", mod.author.c_str(), mod.version.c_str());
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 2, "Status:%s  Type:%.14s  Priority:%d", mod.enabled ? "ON" : "OFF", mod.type.c_str(), mod.priority);
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 3, "Conflicts:%u  Source:%s", static_cast<unsigned int>(conflictCount), mod.legacySDCafiine ? "SDCafiine" : "Solar");
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 4, "C:%s T:%s B:%s A:%s P:%s",
                 mod.hasContent ? "yes" : "no",
                 mod.hasTexturePack ? "yes" : "no",
                 mod.hasBehaviorPack ? "yes" : "no",
                 mod.hasAoc ? "yes" : "no",
                 mod.hasPatches ? "yes" : "no");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 5, "X: technical details");
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 5, "X: technical details");
     } else {
-        PrintTV(TvInfoColumn, TvContentHeaderRow, "TECHNICAL DETAILS");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 0, "Title: %s", TitleManager::FormatTitleId(titleId).c_str());
-        PrintTV(TvInfoColumn, TvContentFirstRow + 1, "Folder: %-34.34s", mod.directoryName.c_str());
-        PrintTV(TvInfoColumn, TvContentFirstRow + 2, "Current:%s P:%d | Default:%s P:%d", mod.enabled ? "ON" : "OFF", mod.priority, mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
-        PrintTV(TvInfoColumn, TvContentFirstRow + 3, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 4, "C:%s T:%s B:%s A:%s P:%s",
+        PrintTV(TvInfoColumn, TvInfoHeaderRow, "TECHNICAL DETAILS");
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 0, "Title: %s", TitleManager::FormatTitleId(titleId).c_str());
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 1, "Folder: %-34.34s", mod.directoryName.c_str());
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 2, "Current:%s P:%d | Default:%s P:%d", mod.enabled ? "ON" : "OFF", mod.priority, mod.defaultEnabled ? "ON" : "OFF", mod.defaultPriority);
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 3, "Source: %s", mod.legacySDCafiine ? "SDCafiine legacy pack" : "Solar mod");
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 4, "C:%s T:%s B:%s A:%s P:%s",
                 mod.hasContent ? "yes" : "no",
                 mod.hasTexturePack ? "yes" : "no",
                 mod.hasBehaviorPack ? "yes" : "no",
                 mod.hasAoc ? "yes" : "no",
                 mod.hasPatches ? "yes" : "no");
-        PrintTV(TvInfoColumn, TvContentFirstRow + 5, "X: mod information");
+        PrintTV(TvInfoColumn, TvInfoFirstRow + 5, "X: mod information");
     }
+}
+
+void RenderEmptyCategory(ModCategory category) {
+    PrintTV(2, TvContentFirstRow, "No mods in %s", CategoryLabel(category));
+    PrintTV(TvInfoColumn, TvInfoHeaderRow, "NO MOD SELECTED");
+    PrintTV(TvInfoColumn, TvInfoFirstRow, "Use LEFT/RIGHT to change category.");
+
+    PrintDRC(2, DrcModsFirstRow, "No mods in %s", CategoryLabel(category));
+    PrintDRC(2, DrcInfoHeaderRow, "NO MOD SELECTED");
+    PrintDRC(2, DrcInfoFirstRow, "Use LEFT/RIGHT to change category.");
 }
 
 void Render(uint64_t titleId,
             const std::vector<ModInfo> &mods,
             size_t selected,
+            ModCategory category,
             const ConflictReport &conflicts,
             bool technical,
             const char *notice = nullptr) {
@@ -384,63 +516,82 @@ void Render(uint64_t titleId,
     OSScreenClearBufferEx(SCREEN_DRC, ScreenBlack);
     RenderHeader();
 
-    const size_t page = selected / ItemsPerPage;
+    const auto visible = VisibleIndices(mods, category);
+    const bool hasVisible = !visible.empty();
+    const size_t visibleSelected = hasVisible ? VisiblePosition(visible, selected) : 0;
+    const size_t page = hasVisible ? visibleSelected / ItemsPerPage : 0;
     const size_t start = page * ItemsPerPage;
-    const size_t end = std::min(start + static_cast<size_t>(ItemsPerPage), mods.size());
-    const size_t pages = std::max<size_t>(1, (mods.size() + ItemsPerPage - 1) / ItemsPerPage);
-    const size_t enabled = EnabledCount(mods);
+    const size_t end = std::min(start + static_cast<size_t>(ItemsPerPage), visible.size());
+    const size_t pages = std::max<size_t>(1, (visible.size() + ItemsPerPage - 1) / ItemsPerPage);
+    const size_t enabledGlobal = EnabledCount(mods);
+    const size_t enabledVisible = EnabledVisibleCount(mods, visible);
+    const std::string categoryBar = CategoryBar(category);
 
-    PrintTV(1, TvContentHeaderRow, "MODS  %u/%u enabled   Page %u/%u",
-            static_cast<unsigned int>(enabled), static_cast<unsigned int>(mods.size()),
+    PrintTV(1, TvCategoryRow, "%s", categoryBar.c_str());
+    PrintTV(1, TvContentHeaderRow, "%s  %u/%u ON   Page %u/%u",
+            CategoryLabel(category),
+            static_cast<unsigned int>(enabledVisible), static_cast<unsigned int>(visible.size()),
             static_cast<unsigned int>(page + 1), static_cast<unsigned int>(pages));
 
     int tvRow = TvContentFirstRow;
-    for (size_t index = start; index < end; ++index, ++tvRow) {
+    for (size_t position = start; position < end; ++position, ++tvRow) {
+        const size_t index = visible[position];
         const ModInfo &mod = mods[index];
         const size_t conflictCount = index < conflicts.perMod.size() ? conflicts.perMod[index] : 0;
         if (index == selected) DrawSelectionMarker(SCREEN_TV, tvRow);
-        PrintTV(2, tvRow, "%c [%s] %-25.25s", index == selected ? '>' : ' ', mod.enabled ? "ON " : "OFF", mod.name.c_str());
-        if (conflictCount > 0) PrintTV(35, tvRow, "!%u", static_cast<unsigned int>(conflictCount));
-        else if (mod.legacySDCafiine) PrintTV(35, tvRow, "SDC");
+        PrintTV(2, tvRow, "%c [%s][%s] %-19.19s",
+                index == selected ? '>' : ' ', mod.enabled ? "ON " : "OFF",
+                ModTypeTag(mod), mod.name.c_str());
+        if (conflictCount > 0) PrintTV(38, tvRow, "!%u", static_cast<unsigned int>(conflictCount));
     }
 
-    if (!mods.empty()) {
-        const size_t conflictCount = selected < conflicts.perMod.size() ? conflicts.perMod[selected] : 0;
-        RenderTVDetails(titleId, mods[selected], conflictCount, technical);
+    if (hasVisible) {
+        const size_t actualSelected = visible[visibleSelected];
+        const size_t conflictCount = actualSelected < conflicts.perMod.size() ? conflicts.perMod[actualSelected] : 0;
+        RenderTVDetails(titleId, mods[actualSelected], conflictCount, technical);
+    } else {
+        RenderEmptyCategory(category);
     }
 
-    PrintTV(1, TvFooterFirstRow + 0, "A Toggle   X Details   L/R Priority   Y Reset");
-    PrintTV(1, TvFooterFirstRow + 1, "+ Save & launch mods   B Launch vanilla once");
-    PrintTV(1, TvFooterFirstRow + 2, "SOLAR %s | %u/%u enabled | conflicts:%u%s | %s",
+    PrintTV(1, TvFooterFirstRow + 0, "UP/DOWN Select   LEFT/RIGHT Category   A Toggle   X Details");
+    PrintTV(1, TvFooterFirstRow + 1, "L/R Priority   Y Reset   + Launch mods   B Vanilla");
+    PrintTV(1, TvFooterFirstRow + 2, "SOLAR %s | %u/%u enabled | %s:%u | conflicts:%u%s | %s",
             LauncherVersion,
-            static_cast<unsigned int>(enabled), static_cast<unsigned int>(mods.size()),
+            static_cast<unsigned int>(enabledGlobal), static_cast<unsigned int>(mods.size()),
+            CategoryLabel(category), static_cast<unsigned int>(visible.size()),
             static_cast<unsigned int>(conflicts.conflictingPaths), conflicts.truncated ? "+" : "",
             notice != nullptr ? notice : "READY");
 
-    PrintDRC(2, DrcModsHeaderRow, "MODS  %u/%u ON                         PAGE %u/%u",
-             static_cast<unsigned int>(enabled), static_cast<unsigned int>(mods.size()),
+    PrintDRC(2, DrcCategoryRow, "%s", categoryBar.c_str());
+    PrintDRC(2, DrcModsHeaderRow, "%s  %u/%u ON                         PAGE %u/%u",
+             CategoryLabel(category),
+             static_cast<unsigned int>(enabledVisible), static_cast<unsigned int>(visible.size()),
              static_cast<unsigned int>(page + 1), static_cast<unsigned int>(pages));
 
     int drcRow = DrcModsFirstRow;
-    for (size_t index = start; index < end; ++index, ++drcRow) {
+    for (size_t position = start; position < end; ++position, ++drcRow) {
+        const size_t index = visible[position];
         const ModInfo &mod = mods[index];
         const size_t conflictCount = index < conflicts.perMod.size() ? conflicts.perMod[index] : 0;
         if (index == selected) DrawSelectionMarker(SCREEN_DRC, drcRow);
-        PrintDRC(2, drcRow, "%c [%s] %.60s", index == selected ? '>' : ' ', mod.enabled ? "ON " : "OFF", mod.name.c_str());
-        if (conflictCount > 0) PrintDRC(70, drcRow, "!%u", static_cast<unsigned int>(conflictCount));
-        else if (mod.legacySDCafiine) PrintDRC(70, drcRow, "SDC");
+        PrintDRC(2, drcRow, "%c [%s][%s] %.52s",
+                 index == selected ? '>' : ' ', mod.enabled ? "ON " : "OFF",
+                 ModTypeTag(mod), mod.name.c_str());
+        if (conflictCount > 0) PrintDRC(72, drcRow, "!%u", static_cast<unsigned int>(conflictCount));
     }
 
-    if (!mods.empty()) {
-        const size_t conflictCount = selected < conflicts.perMod.size() ? conflicts.perMod[selected] : 0;
-        RenderDRCDetails(titleId, mods[selected], conflictCount, technical);
+    if (hasVisible) {
+        const size_t actualSelected = visible[visibleSelected];
+        const size_t conflictCount = actualSelected < conflicts.perMod.size() ? conflicts.perMod[actualSelected] : 0;
+        RenderDRCDetails(titleId, mods[actualSelected], conflictCount, technical);
     }
 
-    PrintDRC(2, DrcControlsFirstRow + 0, "A Toggle       X Details       L/R Priority");
-    PrintDRC(2, DrcControlsFirstRow + 1, "Y Reset        + Launch mods   B Vanilla");
-    PrintDRC(2, DrcControlsFirstRow + 2, "SOLAR %s   %u/%u enabled   Conflicts:%u%s",
+    PrintDRC(2, DrcControlsFirstRow + 0, "UP/DOWN Select    LEFT/RIGHT Category    A Toggle");
+    PrintDRC(2, DrcControlsFirstRow + 1, "X Details   L/R Priority   Y Reset   + Launch   B Vanilla");
+    PrintDRC(2, DrcControlsFirstRow + 2, "SOLAR %s   %u/%u enabled   %s:%u   Conflicts:%u%s",
              LauncherVersion,
-             static_cast<unsigned int>(enabled), static_cast<unsigned int>(mods.size()),
+             static_cast<unsigned int>(enabledGlobal), static_cast<unsigned int>(mods.size()),
+             CategoryLabel(category), static_cast<unsigned int>(visible.size()),
              static_cast<unsigned int>(conflicts.conflictingPaths), conflicts.truncated ? "+" : "");
     PrintDRC(2, DrcControlsFirstRow + 3, "%s", notice != nullptr ? notice : "READY");
 
@@ -473,49 +624,80 @@ MenuResult ModMenu::Show(uint64_t titleId, std::vector<ModInfo> &mods) {
     WPADEnableURCC(true);
 
     size_t selected = 0;
+    ModCategory category = ModCategory::All;
     bool changed = false;
     bool technical = false;
     bool dirty = true;
     ConflictReport conflicts = ConflictDetector::Analyze(mods);
 
     while (true) {
+        EnsureCategorySelection(mods, category, selected);
+
         if (dirty) {
-            Render(titleId, mods, selected, conflicts, technical);
+            Render(titleId, mods, selected, category, conflicts, technical);
             dirty = false;
         }
 
         const uint32_t buttons = PollButtons();
-        if (buttons & VPAD_BUTTON_UP) {
-            selected = selected == 0 ? mods.size() - 1 : selected - 1;
+        if (buttons & VPAD_BUTTON_LEFT) {
+            category = StepCategory(category, -1);
+            EnsureCategorySelection(mods, category, selected);
+            technical = false;
             dirty = true;
+        } else if (buttons & VPAD_BUTTON_RIGHT) {
+            category = StepCategory(category, 1);
+            EnsureCategorySelection(mods, category, selected);
+            technical = false;
+            dirty = true;
+        } else if (buttons & VPAD_BUTTON_UP) {
+            const auto visible = VisibleIndices(mods, category);
+            if (!visible.empty()) {
+                const size_t position = VisiblePosition(visible, selected);
+                selected = visible[position == 0 ? visible.size() - 1 : position - 1];
+                dirty = true;
+            }
         } else if (buttons & VPAD_BUTTON_DOWN) {
-            selected = (selected + 1) % mods.size();
-            dirty = true;
+            const auto visible = VisibleIndices(mods, category);
+            if (!visible.empty()) {
+                const size_t position = VisiblePosition(visible, selected);
+                selected = visible[(position + 1) % visible.size()];
+                dirty = true;
+            }
         } else if (buttons & VPAD_BUTTON_A) {
-            mods[selected].enabled = !mods[selected].enabled;
-            changed = true;
-            conflicts = ConflictDetector::Analyze(mods);
-            dirty = true;
+            if (EnsureCategorySelection(mods, category, selected)) {
+                mods[selected].enabled = !mods[selected].enabled;
+                changed = true;
+                conflicts = ConflictDetector::Analyze(mods);
+                dirty = true;
+            }
         } else if (buttons & VPAD_BUTTON_X) {
-            technical = !technical;
-            dirty = true;
+            if (EnsureCategorySelection(mods, category, selected)) {
+                technical = !technical;
+                dirty = true;
+            }
         } else if (buttons & VPAD_BUTTON_L) {
-            mods[selected].priority = std::max(MinPriority, mods[selected].priority - PriorityStep);
-            changed = true;
-            dirty = true;
+            if (EnsureCategorySelection(mods, category, selected)) {
+                mods[selected].priority = std::max(MinPriority, mods[selected].priority - PriorityStep);
+                changed = true;
+                dirty = true;
+            }
         } else if (buttons & VPAD_BUTTON_R) {
-            mods[selected].priority = std::min(MaxPriority, mods[selected].priority + PriorityStep);
-            changed = true;
-            dirty = true;
+            if (EnsureCategorySelection(mods, category, selected)) {
+                mods[selected].priority = std::min(MaxPriority, mods[selected].priority + PriorityStep);
+                changed = true;
+                dirty = true;
+            }
         } else if (buttons & VPAD_BUTTON_Y) {
-            mods[selected].enabled = mods[selected].defaultEnabled;
-            mods[selected].priority = mods[selected].defaultPriority;
-            changed = true;
-            conflicts = ConflictDetector::Analyze(mods);
-            dirty = true;
+            if (EnsureCategorySelection(mods, category, selected)) {
+                mods[selected].enabled = mods[selected].defaultEnabled;
+                mods[selected].priority = mods[selected].defaultPriority;
+                changed = true;
+                conflicts = ConflictDetector::Analyze(mods);
+                dirty = true;
+            }
         } else if (buttons & VPAD_BUTTON_PLUS) {
             const bool saved = SelectionStore::Save(titleId, mods);
-            Render(titleId, mods, selected, conflicts, technical,
+            Render(titleId, mods, selected, category, conflicts, technical,
                    saved ? "SAVED - LAUNCHING MODS..." : "SAVE FAILED - LAUNCHING THIS SESSION...");
             OSSleepTicks(OSMillisecondsToTicks(140));
             if (!saved) Logger::Warn("Selection could not be saved; applying it for this launch only");
@@ -523,7 +705,7 @@ MenuResult ModMenu::Show(uint64_t titleId, std::vector<ModInfo> &mods) {
             DeinitScreen();
             return {MenuAction::ApplySelected, changed};
         } else if (buttons & VPAD_BUTTON_B) {
-            Render(titleId, mods, selected, conflicts, technical, "LAUNCHING VANILLA...");
+            Render(titleId, mods, selected, category, conflicts, technical, "LAUNCHING VANILLA...");
             OSSleepTicks(OSMillisecondsToTicks(140));
             KPADShutdown();
             DeinitScreen();

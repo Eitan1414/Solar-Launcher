@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="Assets/Solar-logo.png" width="500" alt="Solar Launcher">
+  <img src="Assets/Astra-logo.png" width="500" alt="Astra Launcher">
 </p>
 
-<h1 align="center">☀️ Solar Launcher</h1>
+<h1 align="center">🌙 Astra Launcher</h1>
 
 <p align="center">
   <b>Universal Wii U modding framework for Aroma</b>
@@ -16,19 +16,19 @@
 
 ## About
 
-**Solar Launcher** is an experimental universal modding framework for the **Wii U**, designed to run under **Aroma**.
+**Astra Launcher** is an experimental universal modding framework for the **Wii U**, designed to run under **Aroma**.
 
 The goal is to go beyond traditional file replacement and provide one unified system for loading different kinds of mods.
 
-Solar Launcher is designed to detect the game being launched through its **Title ID**, find compatible mods on the SD card, and allow the user to choose which ones should be enabled.
+Astra Launcher is designed to detect the game being launched through its **Title ID**, find compatible mods on the SD card, and allow the user to choose which ones should be enabled.
 
-> ⚠️ Solar Launcher is currently in early development. Most features described below are planned and may not be implemented yet.
+> ⚠️ Astra Launcher is currently in early development. Most features described below are planned and may not be implemented yet.
 
 ---
 
-## ☀️ Goals
+## 🌙 Goals
 
-Solar Launcher aims to support:
+Astra Launcher aims to support:
 
 - 🎨 Texture packs
 - 📁 File replacement
@@ -54,7 +54,7 @@ Wii U Menu
      ↓
 Game launched
      ↓
-☀ Solar Launcher
+🌙 Astra Launcher
      ↓
 Title ID detected
      ↓
@@ -75,7 +75,7 @@ If no compatible mod is installed, the game should simply launch normally.
 
 ### 📁 File Replacement
 
-The simplest type of Solar mod.
+The simplest type of Astra mod.
 
 Used for things such as:
 
@@ -86,7 +86,7 @@ Used for things such as:
 - UI
 - other game files
 
-The goal is to provide functionality similar to **SDCafiine** while integrating it into the Solar mod manager.
+The goal is to provide functionality similar to **SDCafiine** while integrating it into the Astra mod manager.
 
 Example:
 
@@ -97,7 +97,7 @@ Original game file:
 
         ↓
 
-Solar replacement:
+Astra replacement:
 
 SD:/wiiu/SolarLauncher/games/TITLE_ID/MyMod/content/player/texture.dds
 ```
@@ -106,7 +106,7 @@ SD:/wiiu/SolarLauncher/games/TITLE_ID/MyMod/content/player/texture.dds
 
 ### ⚙️ Gameplay Patches
 
-Solar will eventually be able to apply modifications to the running game.
+Astra will eventually be able to apply modifications to the running game.
 
 Examples:
 
@@ -127,7 +127,7 @@ Maximum Players = 2
 
         ↓
 
-Solar gameplay patch
+Astra gameplay patch
 
         ↓
 
@@ -138,7 +138,7 @@ Maximum Players = 4
 
 ### ➕ Addons
 
-The long-term goal of Solar is to support **real additional content**.
+The long-term goal of Astra is to support **real additional content**.
 
 Instead of only replacing:
 
@@ -148,7 +148,7 @@ Original Level
 Modified Level
 ```
 
-a Solar addon could potentially allow:
+a Astra addon could potentially allow:
 
 ```text
 Original Levels
@@ -160,7 +160,7 @@ New Boss
 New Character
 ```
 
-Advanced addon support will require **game-specific Solar APIs/adapters**, because every game handles levels, characters, saves and other content differently.
+Advanced addon support will require **game-specific Astra APIs/adapters**, because every game handles levels, characters, saves and other content differently.
 
 ---
 
@@ -187,7 +187,7 @@ SD:/wiiu/SolarLauncher/
 └── logs/
 ```
 
-A basic Solar mod could contain:
+A basic Astra mod could contain:
 
 ```text
 MyMod/
@@ -213,15 +213,15 @@ Example `mod.json`:
 
 ## ☕ SDCafiine Compatibility
 
-One of Solar Launcher's goals is to support existing **SDCafiine-style file replacement packs** whenever possible.
+One of Astra Launcher's goals is to support existing **SDCafiine-style file replacement packs** whenever possible.
 
-This would allow users to keep using existing Wii U texture and file packs while benefiting from Solar's mod management system.
+This would allow users to keep using existing Wii U texture and file packs while benefiting from Astra's mod management system.
 
-Solar Launcher is not intended to simply replace SDCafiine, but to build upon the same general idea and extend it toward more advanced types of modding.
+Astra Launcher is not intended to simply replace SDCafiine, but to build upon the same general idea and extend it toward more advanced types of modding.
 
-Solar could support both structures:
+Astra could support both structures:
 
-### Solar native mods
+### Astra native mods
 
 ```text
 SD:/wiiu/SolarLauncher/
@@ -241,13 +241,13 @@ SD:/wiiu/sdcafiine/
         └── content/
 ```
 
-Solar could detect both automatically.
+Astra could detect both automatically.
 
 ---
 
 ## ⚠️ Mod Conflicts
 
-Solar is planned to detect when multiple mods try to replace the same file.
+Astra is planned to detect when multiple mods try to replace the same file.
 
 For example:
 
@@ -261,7 +261,7 @@ Custom Character
     └── character.texture
 ```
 
-Solar could warn the user:
+Astra could warn the user:
 
 ```text
 ⚠ MOD CONFLICT DETECTED
@@ -284,7 +284,7 @@ This would make it possible to combine multiple mods while reducing unexpected c
 
 ## 🪐 Mod Layer System
 
-Solar could treat enabled mods as layers.
+Astra could treat enabled mods as layers.
 
 For example:
 
@@ -302,15 +302,15 @@ Custom Character Mod
 Game starts
 ```
 
-When multiple mods modify the same resource, Solar would follow the configured priority order.
+When multiple mods modify the same resource, Astra would follow the configured priority order.
 
 ---
 
 ## 🎯 First Advanced Test Project
 
-One of the first advanced projects planned for Solar Launcher is a **3–4 player mod for the Wii U port of Cuphead**.
+One of the first advanced projects planned for Astra Launcher is a **3–4 player mod for the Wii U port of Cuphead**.
 
-This project will help test several Solar systems at once:
+This project will help test several Astra systems at once:
 
 - additional players
 - additional controllers
@@ -333,7 +333,7 @@ Player 4 → Custom Mugman Variant
 
 Players 3 and 4 are planned to support custom visual variants based on existing characters.
 
-This project could later serve as an early experiment for a future **Solar Cuphead API** capable of supporting more advanced fan-made content.
+This project could later serve as an early experiment for a future **Astra Cuphead API** capable of supporting more advanced fan-made content.
 
 Examples could eventually include:
 
@@ -349,20 +349,20 @@ Examples could eventually include:
 
 ---
 
-## 🌍 Solar Game APIs
+## 🌍 Astra Game APIs
 
 Some types of content cannot be loaded universally because every game handles its internal systems differently.
 
-Solar therefore plans to support optional **game-specific APIs/adapters**.
+Astra therefore plans to support optional **game-specific APIs/adapters**.
 
 For example:
 
 ```text
-☀ Solar Launcher
+🌙 Astra Launcher
 │
-├── Solar Cuphead API
-├── Solar Mario Kart 8 API
-├── Solar Minecraft API
+├── Astra Cuphead API
+├── Astra Mario Kart 8 API
+├── Astra Minecraft API
 └── Other Game Adapters
 ```
 
@@ -426,13 +426,13 @@ For example, `island.json` could describe the additional content:
 }
 ```
 
-Solar would detect the addon and use the **Solar Cuphead API** to integrate the additional content into the game.
+Astra would detect the addon and use the **Astra Cuphead API** to integrate the additional content into the game.
 
 ---
 
 ## 🛠️ Development
 
-Solar Launcher is planned around the Wii U **Aroma** environment and the **Wii U Plugin System (WUPS)**.
+Astra Launcher is planned around the Wii U **Aroma** environment and the **Wii U Plugin System (WUPS)**.
 
 The project is currently experimental and under active development.
 
@@ -440,7 +440,7 @@ The project is currently experimental and under active development.
 
 ## 🗓️ Development Roadmap
 
-### v0.1 — Solar Core
+### v0.1 — Astra Core
 
 - Title ID detection
 - SD mod scanning
@@ -455,7 +455,7 @@ The project is currently experimental and under active development.
 - Texture/file packs
 - Initial SDCafiine compatibility
 - Multiple replacement packs
-- Basic Solar mod menu
+- Basic Astra mod menu
 
 ### v0.3 — Mod Management
 
@@ -502,12 +502,12 @@ The project is currently experimental and under active development.
 
 ---
 
-## 🔧 Planned Solar Architecture
+## 🔧 Planned Astra Architecture
 
-Solar Launcher is planned around several main systems:
+Astra Launcher is planned around several main systems:
 
 ```text
-☀ Solar Launcher
+🌙 Astra Launcher
 │
 ├── Title Manager
 │   ├── Detect current game
@@ -550,7 +550,7 @@ Solar Launcher is planned around several main systems:
 
 ---
 
-## ☀️ Solar Launcher Flow
+## 🌙 Astra Launcher Flow
 
 ```text
               Wii U Menu
@@ -559,7 +559,7 @@ Solar Launcher is planned around several main systems:
               Start a Game
                    │
                    ↓
-          ☀ Solar Launcher
+          🌙 Astra Launcher
                    │
                    ↓
            Detect Title ID
@@ -568,7 +568,7 @@ Solar Launcher is planned around several main systems:
        Search Compatible Mods
                    │
                    ↓
-            Solar Mod Menu
+            Astra Mod Menu
                    │
           ┌────────┴────────┐
           │                 │
@@ -589,9 +589,9 @@ Solar Launcher is planned around several main systems:
 
 ---
 
-## 📦 Solar Mod Types
+## 📦 Astra Mod Types
 
-Solar Launcher currently plans four main mod categories:
+Astra Launcher currently plans four main mod categories:
 
 ```text
 [1] REPLACEMENT
@@ -630,7 +630,7 @@ Uses:
 
 ## 🤝 Contributions
 
-Solar Launcher is intended to become an open modding framework for the Wii U community.
+Astra Launcher is intended to become an open modding framework for the Wii U community.
 
 Contributions are welcome in areas such as:
 
@@ -653,30 +653,34 @@ Every contribution can help expand what is possible on the Wii U.
 
 ## ❤️ Credits
 
-### ☀️ Project
+### 🌙 Project
 
-**Solar Launcher**
+**Astra Launcher**
 
 Created and led by **[Eitan1414/Pixel Plugin Studios]**
 
-Concept, project direction, testing, design and original idea by the Solar Launcher project creator.
+Concept, project direction, testing, design and original idea by the Astra Launcher project creator.
 
 ---
 
 ### 🤖 Development Assistance
 
-Special thanks to **OpenAI's GPT-5.6 Sol** for development assistance, technical research, brainstorming, architecture design and support throughout the creation of Solar Launcher.
+Special thanks to **OpenAI's GPT-5.6 Sol** for development assistance, technical research, brainstorming, architecture design and support throughout the creation of this project.
 
-The name **Solar Launcher** is a reference to **GPT-5.6 Sol**, as a small tribute for its help across this project and other Wii U development projects.
+The project was originally named **Solar Launcher** in tribute to **GPT-5.6 Sol**, whose help contributed to this project and other Wii U development projects. Its yellow sun logo reflected that name.
 
-> Solar Launcher is an independent community project and is not officially affiliated with or endorsed by OpenAI.
+As the project continues with **GPT-6 Astra**, it is now called **Astra Launcher**, extending that tribute to this new chapter. The original tribute to Sol remains part of the project's history.
+
+The logo has evolved with the name: a **pale mauve moon** now replaces the yellow sun, while the familiar **white lightning-shaped L** is kept, enlarged and centered within the moon. **Astra** appears in glacier blue beside **Launcher** in white. This new visual identity connects the project's beginnings with its next chapter.
+
+> Astra Launcher is an independent community project and is not officially affiliated with or endorsed by OpenAI.
 (yep I'm using IA and what I need some moral and development help anyway I know that all of you already do a lot of crazy stuff with IA so don't blame me)
 
 ---
 
 ### 🛠️ Wii U Homebrew Community
 
-Solar Launcher builds upon years of work from the Wii U homebrew community.
+Astra Launcher builds upon years of work from the Wii U homebrew community.
 
 Special thanks to the developers and contributors behind projects and tools such as:
 
@@ -690,13 +694,13 @@ Special thanks to the developers and contributors behind projects and tools such
 - **SDCafiine**
 - **FTPiiU Everywhere**
 
-Their work makes projects like Solar Launcher possible and continues to expand what the Wii U can do.
+Their work makes projects like Astra Launcher possible and continues to expand what the Wii U can do.
 
 ---
 
 ### 🎮 Cuphead Wii U
 
-Special thanks to **The Latte Team** for their work on the Wii U port of **Cuphead**, which is planned to serve as one of Solar Launcher's first advanced modding test cases.
+Special thanks to **The Latte Team** for their work on the Wii U port of **Cuphead**, which is planned to serve as one of Astra Launcher's first advanced modding test cases.
 
 The Cuphead 3–4 player project is intended as a community modification and is separate from the original Wii U port.
 
@@ -718,13 +722,13 @@ Thanks to everyone who contributes:
 - tools
 - tutorials
 
-Solar Launcher is intended to grow together with the Wii U modding and homebrew community.
+Astra Launcher is intended to grow together with the Wii U modding and homebrew community.
 
 ---
 
 ## ⚠️ Disclaimer
 
-Solar Launcher is an unofficial homebrew project.
+Astra Launcher is an unofficial homebrew project.
 
 It is not affiliated with or endorsed by:
 
@@ -736,14 +740,14 @@ It is not affiliated with or endorsed by:
 
 Users should provide their own legally obtained games and game files.
 
-Solar Launcher does not aim to distribute copyrighted game assets.
+Astra Launcher does not aim to distribute copyrighted game assets.
 
 Game names and trademarks belong to their respective owners.
 
 ---
 
 <p align="center">
-  ☀️ <b>Solar Launcher</b><br>
+  🌙 <b>Astra Launcher</b><br>
   <i>Universal Wii U modding framework</i>
 </p>
 
